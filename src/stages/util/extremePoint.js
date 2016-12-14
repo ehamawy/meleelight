@@ -1,4 +1,8 @@
-export function extremePoint(wall, extreme) {
+// @flow
+
+import {Vec2D} from "../../main/util/Vec2D";
+
+export function extremePoint(wall : [Vec2D, Vec2D], extreme : string) : Vec2D {
   const  v1 = wall[0];
   const  v2 = wall[1];
   switch (extreme) {
@@ -10,7 +14,6 @@ export function extremePoint(wall, extreme) {
       else {
         return v2;
       }
-      break;
     case "d":
     case "b":
       if (v2.y > v1.y) {
@@ -19,7 +22,6 @@ export function extremePoint(wall, extreme) {
       else {
         return v2;
       }
-      break;
     case "l":
       if (v2.x > v1.x) {
         return v1;
@@ -27,7 +29,6 @@ export function extremePoint(wall, extreme) {
       else {
         return v2;
       }
-      break;
     case "r":
       if (v2.x < v1.x) {
         return v1;
@@ -35,9 +36,8 @@ export function extremePoint(wall, extreme) {
       else {
         return v2;
       }
-      break;
     default:
       console.log( "error in 'extremePoint': invalid parameter "+extreme+", not up/top/down/bottom/left/right");
-      break;
+      return v1; // just to make the type checker happy
   }
 };

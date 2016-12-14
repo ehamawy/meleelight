@@ -23,7 +23,7 @@ function dealWithCollision(i, newCenter) {
   player[i].phys.pos = newCenter;
 }
 
-function dealWithWallCollision (i, newCenter, wallType,input) {
+function dealWithWallCollision (i, newCenter, wallType, input) {
   player[i].phys.pos = newCenter;
 
   let wallLabel = "L";
@@ -140,12 +140,12 @@ function dealWithGround(i, ground, groundTypeAndIndex, connectednessFunction, in
     groundOrPlatform = 1;
   }
 
-  let maybeLeftGroundTypeAndIndex  = false;
-  let maybeRightGroundTypeAndIndex = false;
+  let maybeLeftGroundTypeAndIndex  = null;
+  let maybeRightGroundTypeAndIndex = null;
 
   if ( player[i].phys.ECBp[0].x < leftmostGroundPoint.x) {
     maybeLeftGroundTypeAndIndex = connectednessFunction(groundTypeAndIndex,"l");
-    if (maybeLeftGroundTypeAndIndex === false) { // no other ground to the left
+    if (maybeLeftGroundTypeAndIndex === null) { // no other ground to the left
       [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint,input);
     }
     else {
@@ -165,7 +165,7 @@ function dealWithGround(i, ground, groundTypeAndIndex, connectednessFunction, in
   }
   else if ( player[i].phys.ECBp[0].x > rightmostGroundPoint.x) {
     maybeRightGroundTypeAndIndex = connectednessFunction(groundTypeAndIndex,"r");
-    if (maybeRightGroundTypeAndIndex === false) { // no other ground to the right
+    if (maybeRightGroundTypeAndIndex === null) { // no other ground to the right
       [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint,input);
     }
     else {
@@ -613,7 +613,7 @@ export function physics (i,input){
       // squash grounded ECB if there is a low ceiling
       if (stillGrounded) {
         ecbSquashFactor = groundedECBSquashFactor( player[i].phys.ECBp, toList(activeStage.ceiling) );
-        if (! (ecbSquashFactor === false ) && ecbSquashFactor < 1 && ecbSquashFactor > 0) {
+        if (ecbSquashFactor !== null && ecbSquashFactor < 1 && ecbSquashFactor > 0) {
           player[i].phys.ECBp = squashDownECB(player[i].phys.ECBp, ecbSquashFactor - additionalOffset );
         }
         else {
@@ -654,11 +654,11 @@ export function physics (i,input){
     let surfacesMaybeCenterAndTouchingType = getNewMaybeCenterAndTouchingType(player[i].phys.ECBp, player[i].phys.ECB1, player[i].phys.pos
                                                                              , relevantSurfaces, activeStage, connectednessFunction );
 
-    if (surfacesMaybeCenterAndTouchingType === false) {
+    if (surfacesMaybeCenterAndTouchingType === null) {
       // no collision, do nothing
     }
     else {
-      if (surfacesMaybeCenterAndTouchingType[1] === false ) {
+      if (surfacesMaybeCenterAndTouchingType[1] === null ) {
         // collision but player no longer touching surface
         dealWithCollision(i, surfacesMaybeCenterAndTouchingType[0]);
       }
