@@ -270,7 +270,7 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
         nextWallToTheSideTop    = extremePoint(nextWallToTheSide, "t");
         nextWallToTheSideBottom = extremePoint(nextWallToTheSide, "b");
         nextWallToTheSideAngle  = lineAngle( [nextWallToTheSideBottom, nextWallToTheSideTop]);
-        if (sign * nextWallToTheSideAngle >= sign * Math.PI) {
+        if (sign * nextWallToTheSideAngle >= sign * ( Math.PI / 2) ) {
           console.log("'pushoutHorizontally': top case, pushing out side point (adjacent wall is useless).");
           return (wallSide.x - ecbpSame.x);
         }
