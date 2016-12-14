@@ -582,7 +582,7 @@ export function physics (i,input){
 
     let connectedSurfaces = activeStage.connected;
     function connectednessFunction(gd, side) {
-      return false;
+      return null;
     }
     if (connectedSurfaces === null || connectedSurfaces === undefined ) {
       // do nothing
