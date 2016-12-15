@@ -657,7 +657,7 @@ export function physics (i : number, input : any) : void {
 
     let relevantGround = null;
 
-    if (stillGrounded) {
+    if (alreadyGrounded && stillGrounded) {
       relevantGround = ["g", player[i].phys.onSurface[1]];
       if (player[i].phys.onSurface[0] === 1) {
         relevantGround[0] = "p";
