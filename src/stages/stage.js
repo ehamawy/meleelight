@@ -1,5 +1,8 @@
 // @flow
 
+import {Vec2D} from "../main/util/Vec2D";
+import {Box2D} from "../main/util/Box2D";
+
 export type Stage = {
   box           : Array< Box2D >,
   platform      : Array< [Vec2D, Vec2D] >,

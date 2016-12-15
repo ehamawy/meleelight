@@ -20,7 +20,6 @@ type ECB = [Vec2D, Vec2D, Vec2D, Vec2D];
 
 
 const magicAngle : number = Math.PI/6;
-const maximumCollisionDetectionPasses : number = 15 ;
 export const additionalOffset : number = 0.00001;
 
 // next ECB point index, counterclockwise or clockwise
@@ -75,16 +74,16 @@ function isOutside (point : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Ve
 // this function returns the parameter t, such that p3 + t*(p4-p3) is the intersection point of the two lines
 // please ensure this function is not called on parallel lines
 function coordinateInterceptParameter (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D]) : number {
-  //const x1 = line1[0].x;
-  //const x2 = line1[1].x;
-  //const x3 = line2[0].x;
-  //const x4 = line2[1].x;
-  //const y1 = line1[0].y;
-  //const y2 = line1[1].y;
-  //const y3 = line2[0].y;
-  //const y4 = line2[1].y;
-  //const t = ( (x1-x3)*(y2-y1) + (x1-x2)*(y1-y3) ) / ( (x4-x3)*(y2-y1) + (x2-x1)*(y3-y4) );
-  //return t;
+  // const x1 = line1[0].x;
+  // const x2 = line1[1].x;
+  // const x3 = line2[0].x;
+  // const x4 = line2[1].x;
+  // const y1 = line1[0].y;
+  // const y2 = line1[1].y;
+  // const y3 = line2[0].y;
+  // const y4 = line2[1].y;
+  // const t = ( (x1-x3)*(y2-y1) + (x1-x2)*(y1-y3) ) / ( (x4-x3)*(y2-y1) + (x2-x1)*(y3-y4) );
+  // return t;
   return (     (line1[0].x-line2[0].x)*(line1[1].y-line1[0].y) 
              + (line1[0].x-line1[1].x)*(line1[0].y-line2[0].y) ) 
           / (  (line2[1].x-line2[0].x)*(line1[1].y-line1[0].y) 
@@ -98,6 +97,74 @@ export function coordinateIntercept (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec
   return ( new Vec2D( line2[0].x + t*(line2[1].x - line2[0].x), line2[0].y + t*(line2[1].y - line2[0].y) ) );
 };
 
+function pointSweepingCheck ( wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
+                            , wallTopOrRight : Vec2D, wallBottomOrLeft : Vec2D
+                            , stage : Stage, connectednessFunction : ConnectednessFunction
+                            , xOrY : number, position : Vec2D, same
+                            , ecb1Same : Vec2D, ecbpSame : Vec2D
+                            , ecb1Top  : Vec2D, ecbpTop  : Vec2D ) : null | [null | string, Vec2D, number, number] {
+
+  let relevantECB1Point = ecb1Same;
+  let relevantECBpPoint = ecbpSame;
+
+  if (wallType === "l" || wallType === "r") { // left or right wall, might need to check top ECB point instead of same side ECB point for collision
+    // determine which of top or same side ECB point is relevant through an angle calculation
+    const wallAngle = lineAngle([wallBottomOrLeft, wallTopOrRight]); // bottom to top for walls
+    const ecbAngle  = lineAngle([ecbpSame, ecbpTop]); // also bottom to top
+    if ( ( wallType === "l" && wallAngle > ecbAngle) || (wallType === "r" && wallAngle < ecbAngle) ) {
+      relevantECB1Point = ecb1Top;
+      relevantECBpPoint = ecbpTop;
+    }
+  }
+
+  const s = coordinateInterceptParameter (wall, [relevantECB1Point,relevantECBpPoint]); // need to put wall first
+  let angularParameter = same;
+
+  if (s > 1 || s < 0 || isNaN(s) || s === Infinity) {
+    console.log("'pointSweepingCheck': no collision, sweeping parameter outside of allowable range, with "+wallType+" surface.");
+    return null; // no collision
+  }
+  else {
+    const intersection = new Vec2D (relevantECB1Point.x + s*(relevantECBpPoint.x-relevantECB1Point.x), relevantECB1Point.y + s*(relevantECBpPoint.y-relevantECB1Point.y));
+    if (getXOrYCoord(intersection, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) || getXOrYCoord(intersection, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY)) {
+      console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
+      return null; // no collision
+    }
+    else {
+      let newPosition = null; // initialising
+
+      let additionalPushout = additionalOffset;
+      switch(wallType) {
+        case "l":
+        case "c":
+          additionalPushout = -additionalOffset;
+          break;
+        default:
+          break;
+      }
+
+      switch (wallType){
+        case "c":
+        case "g":
+        case "p": // vertical pushout
+          const yPushout = pushoutVertically (wall, wallType, wallIndex, stage, connectednessFunction, [ecbpSame, new Vec2D( ecbpSame.x , ecbpSame.y -1) ]);
+          newPosition = new Vec2D( position.x, position.y + yPushout - ecbpSame.y + additionalPushout );
+          // still have: angularParameter = same
+          break;
+        case "l":
+        case "r": // horizontal pushout
+        default:
+          const pushoutAnswer = pushoutHorizontally ( wall, wallType, wallIndex, stage, connectednessFunction, same, ecbpSame, ecbpTop);
+          const xPushout   = pushoutAnswer[0];
+          angularParameter = pushoutAnswer[1];
+          newPosition = new Vec2D( position.x + xPushout + additionalPushout, position.y);
+          break;
+      }
+      console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
+      return ( [wallType, newPosition, s, angularParameter] );
+    }
+  }
+};
 
 // in this function, we are considering a line that is sweeping,
 // from the initial line 'line1' passing through the two points p1 = (x1,y1), p2 = (x2,y2)
@@ -153,7 +220,7 @@ function lineSweepParameters( line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D], fl
 
 function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : number
                           , position : Vec2D, counterclockwise : boolean
-                          , corner : Vec2D, wallType : string) : null | [null | string, Vec2D, number] {
+                          , corner : Vec2D, wallType : string) : null | [null | string, Vec2D, number, number] {
 
   // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
   let interiorECBside = "l";   
@@ -190,11 +257,19 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
         additionalPushout = -additionalOffset;
       }
       
-      const xIntersect = coordinateIntercept( [ ecbp[same], ecbp[other] ], [ corner, new Vec2D( corner.x+1, corner.y ) ]);
-      newPosition = new Vec2D( position.x + corner.x - xIntersect.x + additionalPushout, position.y);
+      const xIntersect = coordinateIntercept( [ ecbp[same], ecbp[other] ], [ corner, new Vec2D( corner.x+1, corner.y ) ]).x;
+      newPosition = new Vec2D( position.x + corner.x - xIntersect + additionalPushout, position.y);
+      let same2 = same;
+      let other2 = other;
+      if (same === 0 && other === 3) {
+        same2 = 4;
+      }
+      else if (same === 3 && other === 0) {
+        other2 = 4;
+      }
+      const angularParameter = same2 + (xIntersect - ecbp[same].x) / (ecbp[other].x - ecbp[same].x) * (other2 - same2);
       console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
-      return ( [null, newPosition, s] ); // s is the sweeping parameter, t just moves along the edge
-            //  ^^^^ null because colliding at a corner never counts as 'touching' for the purpose of the physics
+      return ( [null, newPosition, s, angularParameter] ); // s is the sweeping parameter, t just moves along the edge
     }
     else {
       console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross "+wallType+" corner.");
@@ -208,11 +283,11 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
 };
 
 
-// this function returns the absolute horizontal pushout vector for a wall
+// this function returns the absolute horizontal pushout vector for a wall, and the angular parameter
 // this function recursively looks at adjacent walls if necessary
 function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                              , stage : Stage, connectednessFunction : ConnectednessFunction
-                             , ecbpSame : Vec2D, ecbpTop : Vec2D) : number {
+                             , same : number, ecbpSame : Vec2D, ecbpTop : Vec2D) : [number, number] {
   console.log("'pushoutHorizontally' working with wall "+wallType+""+wallIndex+".");
 
   const wallRight  = extremePoint(wall, "r");
@@ -227,9 +302,9 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
   const ecbAngle  = lineAngle( [ecbpSame  , ecbpTop]); // also bottom to top
 
 
-// we are assuming that the chains of connected surfaces go clockwise:
-//    - top to bottom for right walls
-//    - bottom to top for left walls
+  // we are assuming that the chains of connected surfaces go clockwise:
+  //    - top to bottom for right walls
+  //    - bottom to top for left walls
 
 
   let nextWallToTheSideTypeAndIndex = null;
@@ -252,13 +327,13 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
     let nextWallToTheSideAngle  = null;
     if (ecbpTop.y <= wallTop.y) { // in this case, just push the top point out
       console.log("'pushoutHorizontally': top case, pushing out top point.");
-      return ( coordinateIntercept(wall, topLine).x - ecbpTop.x); 
+      return [ coordinateIntercept(wall, topLine).x - ecbpTop.x, 2]; 
     }
     else if (ecbpSame.y >= wallTop.y) { // in this case, push the side point out
       nextWallToTheSideTypeAndIndex = connectednessFunction( [wallType, wallIndex] , dir);
       if (nextWallToTheSideTypeAndIndex === null || nextWallToTheSideTypeAndIndex[0] !== wallType) {
         console.log("'pushoutHorizontally': top case, pushing out side point (no relevant adjacent wall).");
-        return (wallSide.x - ecbpSame.x);
+        return [wallSide.x - ecbpSame.x, same];
       }
       else {
         if (wallType === "r") {
@@ -272,11 +347,11 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
         nextWallToTheSideAngle  = lineAngle( [nextWallToTheSideBottom, nextWallToTheSideTop]);
         if (sign * nextWallToTheSideAngle >= sign * ( Math.PI / 2) ) {
           console.log("'pushoutHorizontally': top case, pushing out side point (adjacent wall is useless).");
-          return (wallSide.x - ecbpSame.x);
+          return [wallSide.x - ecbpSame.x, same];
         }
         else {
           console.log("'pushoutHorizontally': top case, deferring to adjacent wall.");
-          return pushoutHorizontally(nextWallToTheSide , wallType, nextWallToTheSideTypeAndIndex[1], stage, connectednessFunction, ecbpSame, ecbpTop);
+          return pushoutHorizontally(nextWallToTheSide , wallType, nextWallToTheSideTypeAndIndex[1], stage, connectednessFunction, same, ecbpSame, ecbpTop);
         }
       }
     }
@@ -285,8 +360,10 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
       nextWallToTheSideTypeAndIndex = connectednessFunction( [wallType, wallIndex] , dir);
       if (nextWallToTheSideTypeAndIndex === null || nextWallToTheSideTypeAndIndex[0] !== wallType) {
         // place the relevant top ECB edge on the corner
+        const xIntercept1 = coordinateIntercept( [ecbpSame, ecbpTop], cornerLine ).x;
+        const angularParameter1 = same + (xIntercept1 - ecbpSame.x) / (ecbpTop.x - ecbpSame.x) * (2-same);
         console.log("'pushoutHorizontally': top case, directly pushing out to corner (no relevant adjacent wall).");
-        return (wallSide.x - coordinateIntercept( [ecbpSame, ecbpTop], cornerLine ).x);
+        return [wallSide.x - xIntercept1, angularParameter1];
       }
       else {
         if (wallType === "r") {
@@ -300,12 +377,14 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
         nextWallToTheSideAngle  = lineAngle( [nextWallToTheSideBottom, nextWallToTheSideTop]);
         if (sign * nextWallToTheSideAngle > sign * ecbAngle) {
           // place the relevant ECB edge on the corner
+          const xIntercept2 = coordinateIntercept( [ecbpSame, ecbpTop], cornerLine ).x;
+          const angularParameter2 = same + (xIntercept2 - ecbpSame.x) / (ecbpTop.x - ecbpSame.x) * (2-same);
           console.log("'pushoutHorizontally': top case, directly pushing out to corner (adjacent wall is useless).");
-          return (wallSide.x - coordinateIntercept( [ecbpSame, ecbpTop], cornerLine ).x);
+          return [wallSide.x - xIntercept2, angularParameter2];
         }
         else {
           console.log("'pushoutHorizontally': top case, deferring corner pushing to adjacent wall.");
-          return pushoutHorizontally( nextWallToTheSide , wallType, nextWallToTheSideTypeAndIndex[1], stage, connectednessFunction, ecbpSame, ecbpTop);
+          return pushoutHorizontally( nextWallToTheSide , wallType, nextWallToTheSideTypeAndIndex[1], stage, connectednessFunction, same, ecbpSame, ecbpTop);
         }
 
       }
@@ -315,7 +394,7 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
   else { // now only dealing with the same-side ECB point
     if ( sign * xIntersect <= sign * wallSide.x ) {
       console.log("'pushoutHorizontally': side case, directly pushing out side point.");
-      return (xIntersect - ecbpSame.x);
+      return [xIntersect - ecbpSame.x, same];
     }
     else {        
       if (wallAngle > Math.PI) {
@@ -327,7 +406,7 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
 
       if (nextWallToTheSideTypeAndIndex === null || nextWallToTheSideTypeAndIndex[0] !== wallType) {
         console.log("'pushoutHorizontally': side case, directly pushing out side point (no relevant adjacent wall).");
-        return (xIntersect - ecbpSame.x);
+        return [xIntersect - ecbpSame.x, same];
       }
       else {
         if (wallType === "r") {
@@ -338,11 +417,11 @@ function pushoutHorizontally ( wall : [Vec2D, Vec2D], wallType : string, wallInd
         }
         if (sign * extremePoint(nextWallToTheSide, wallType).x <= sign * wallSide.x ) {
           console.log("'pushoutHorizontally': side case, directly pushing out side point (adjacent wall is useless).");
-          return (xIntersect - ecbpSame.x);
+          return [xIntersect - ecbpSame.x, same];
         }
         else {
           console.log("'pushoutHorizontally': side case, deferring side pushing to adjacent wall.");
-          return pushoutHorizontally( nextWallToTheSide , wallType, nextWallToTheSideTypeAndIndex[1], stage, connectednessFunction, ecbpSame, ecbpTop);
+          return pushoutHorizontally( nextWallToTheSide , wallType, nextWallToTheSideTypeAndIndex[1], stage, connectednessFunction, same, ecbpSame, ecbpTop);
         }
       }
     }
@@ -439,85 +518,17 @@ function pushoutVertically ( wall : [Vec2D, Vec2D], wallType : string, wallIndex
 
 };
 
-function pointSweepingCheck ( wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
-                            , wallTopOrRight : Vec2D, wallBottomOrLeft : Vec2D
-                            , stage : Stage, connectednessFunction : ConnectednessFunction
-                            , xOrY : number, position : Vec2D
-                            , ecb1Same : Vec2D, ecbpSame : Vec2D
-                            , ecb1Top  : Vec2D, ecbpTop  : Vec2D ) : null | [null | string, Vec2D, number] {
-
-  let relevantECB1Point = ecb1Same;
-  let relevantECBpPoint = ecbpSame;
-
-  if (wallType === "l" || wallType === "r") { // left or right wall, might need to check top ECB point instead of same side ECB point for collision
-    // determine which of top or same side ECB point is relevant through an angle calculation
-    const wallAngle = lineAngle([wallBottomOrLeft, wallTopOrRight]); // bottom to top for walls
-    const ecbAngle  = lineAngle([ecbpSame, ecbpTop]); // also bottom to top
-    if ( ( wallType === "l" && wallAngle > ecbAngle) || (wallType === "r" && wallAngle < ecbAngle) ) {
-      relevantECB1Point = ecb1Top;
-      relevantECBpPoint = ecbpTop;
-    }
-  }
-
-  const s = coordinateInterceptParameter (wall, [relevantECB1Point,relevantECBpPoint]); // need to put wall first
-
-  if (s > 1 || s < 0 || isNaN(s) || s === Infinity) {
-    console.log("'pointSweepingCheck': no collision, sweeping parameter outside of allowable range, with "+wallType+" surface.");
-    return null; // no collision
-  }
-  else {
-    const intersection = new Vec2D (relevantECB1Point.x + s*(relevantECBpPoint.x-relevantECB1Point.x), relevantECB1Point.y + s*(relevantECBpPoint.y-relevantECB1Point.y));
-    if (getXOrYCoord(intersection, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) || getXOrYCoord(intersection, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY)) {
-      console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
-      return null; // no collision
-    }
-    else {
-      let newPosition = null; // initialising
-
-      let additionalPushout = additionalOffset;
-      switch(wallType) {
-        case "l":
-        case "c":
-          additionalPushout = -additionalOffset;
-          break;
-        default:
-          break;
-      }
-
-      switch (wallType){
-        case "c":
-        case "g":
-        case "p": // vertical pushout
-          const yPushout = pushoutVertically (wall, wallType, wallIndex, stage, connectednessFunction, [ecbpSame, new Vec2D( ecbpSame.x , ecbpSame.y -1) ]);
-          newPosition = new Vec2D( position.x, position.y + yPushout - ecbpSame.y + additionalPushout );
-          break;
-        case "l":
-        case "r": // horizontal pushout
-        default:
-          const xPushout = pushoutHorizontally ( wall, wallType, wallIndex, stage, connectednessFunction, ecbpSame, ecbpTop);
-          newPosition = new Vec2D( position.x + xPushout + additionalPushout, position.y);
-          break;
-      }
-      let touchingWall = wallType;
-      if (getXOrYCoord(newPosition, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY) || getXOrYCoord(newPosition, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) ) {
-        touchingWall = null;
-      }
-      console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
-      return ( [touchingWall, newPosition, s] );
-    }
-  }
-};
-
 // ecbp : projected ECB
 // ecb1 : old ECB
-// function return type: either null (no collision) or a triple [touchingWall, proposed new player position, sweeping parameter]
-// touchingWall is either null, or the walltype, indicating whether the player is still touching that wall after the transformation
+// function return type: either null (no collision) or a quadruple [touchingWall, proposed new player position, sweeping parameter, angular parameter]
+// touchingWall is either null (for a corner collision) or the type of surface that was collided
 // the sweeping parameter s corresponds to the location of the collision, between ECB1 and ECBp
+// the angular parameter is the location at which the ECB is now touching the surface after being pushed out, from 0 to 4
 // terminology in the comments: a wall is a segment with an inside and an outside,
 // which is contained in an infinite line, extending both ways, which also has an inside and an outside
 function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
                        , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
-                       , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [null | string, Vec2D, number] {
+                       , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [null | string, Vec2D, number, number] {
 
 // STANDING ASSUMPTIONS
 // the ECB can only collide a ground/platform surface on its bottom point (or a bottom edge on a corner of the ground/platform)
@@ -699,49 +710,23 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
 
     let closestPointCollision = null;
 
-    let yOrX = 0;
-    if (xOrY === 0) {
-      yOrX = 1;
+    // now we run some checks to see if the relevant projected ECB point was already on the other side of the wall
+    // this prevents collisions being detected when going through a surface in reverse
+
+    if ( checkTopInstead && !isOutside( ecb1[2], wallRight, wallLeft, "c" ) ) { 
+      console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", top ECB1 point on the inside side of the wall. ");
     }
-
-
-    // the first step is to check whether, even if there is a collision, the wall could actually do anything about it
-    // this check avoids infinite loops: if a wall can't actually push out the ECB to avoid a collision, we consider that no collision is taking place
-    let allowCollision = true;
-
-    if ( extremeSign * getXOrYCoord(ecbp[same], yOrX) > extremeSign * getXOrYCoord(extremeWall, yOrX) ) { // same side projected ECB point beyond extreme point of surface
-      allowCollision = false;
-    }
-    else if (     checkTopInstead // left or right wall where top ECB point can touch
-               && ecbp[2].y > wallTop.y
-               && isOutside( wallTop, ecbp[same], ecbp[2], wallType ) // same-top ECB edge has not gone through to the inside of the top corner
-            ) {
-      allowCollision = false;
-    }
-
-    if (allowCollision === false ) {
-      console.log("'findCollision': "+wallType+""+wallIndex+" is impotent, skipped point sweep.");
+    else if ( !checkTopInstead && !isOutside ( ecb1[same], wallTopOrRight, wallBottomOrLeft, wallType ) ) {
+      console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", same side ECB1 point on the inside side of the wall. ");
     }
     else {
-
-      // now we run some checks to see if the relevant projected ECB point was already on the other side of the wall
-      // this prevents collisions being detected when going through a surface in reverse
-
-      if ( checkTopInstead && !isOutside( ecb1[2], wallRight, wallLeft, "c" ) ) { 
-        console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", top ECB1 point on the inside side of the wall. ");
-      }
-      else if ( !checkTopInstead && !isOutside ( ecb1[same], wallTopOrRight, wallBottomOrLeft, wallType ) ) {
-        console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", same side ECB1 point on the inside side of the wall. ");
-      }
-      else {
-         // point sweeping check
-        closestPointCollision = pointSweepingCheck ( wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, stage, connectednessFunction
-                                                   , xOrY, position, ecb1[same], ecbp[same], ecb1[2], ecbp[2]);
-      }
+       // point sweeping check
+      closestPointCollision = pointSweepingCheck ( wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, stage, connectednessFunction
+                                                 , xOrY, position, same, ecb1[same], ecbp[same], ecb1[2], ecbp[2]);
     }
 
   
-    let [finalCollision, finalCollisionType] = [null,"?"];
+    let [finalCollision, finalCollisionType] = [null,"(?)"];
 
     // if we have only one collision type (point/edge), take that one
     if (closestEdgeCollision === null ) {
@@ -774,67 +759,128 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
 };
 
 
-type MaybeCenterAndTouchingTypeType = null | [Vec2D, null | [string, number], number];
+type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], number];
 type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 
-// this function loops over all walls/surfaces it is provided, calculating the collision offsets that each ask for,
-// and at each iteration returning the smallest possible offset (i.e. collision with smallest sweeping parameter)
-// a 'wallAndThenWallTypeAndIndex' is of the form '[wall, [wallType, index]]'
-// where "index" is the index of the wall in the list of walls of that type in the stage
-// this function returns a 'maybeCenterAndTouchingType', as described in the above type declaration
-// s is the sweeping parameter
-function loopOverWalls( ecbp : ECB, ecb1 : ECB, position : Vec2D
-                      , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
-                      , oldMaybeCenterAndTouchingType : MaybeCenterAndTouchingTypeType
-                      , stage : Stage, connectednessFunction : ConnectednessFunction, passNumber : number ) : MaybeCenterAndTouchingTypeType {
-  console.log("'loopOverWalls' pass number "+passNumber+".");
-  let newCollisionHappened = false;
-  const suggestedMaybeCenterAndTouchingTypes : Array<MaybeCenterAndTouchingTypeType> = [null]; // initialise list of new collisions
-  if (passNumber > maximumCollisionDetectionPasses) {
-    //console.log('collision detection giving up, cannot resolve collisions');
-    return oldMaybeCenterAndTouchingType;
-  }
-  else { 
-    const collisionData = wallAndThenWallTypeAndIndexs.map( 
-                                             // [  [ touchingWall, position, s ]  , touchingType ]
-              (wallAndThenWallTypeAndIndex)  => [ findCollision (ecbp, ecb1, position, wallAndThenWallTypeAndIndex[0]
-                                                                , wallAndThenWallTypeAndIndex[1][0], wallAndThenWallTypeAndIndex[1][1]
-                                                                , stage, connectednessFunction )
-                                                , wallAndThenWallTypeAndIndex[1] ]);
-    for (let i = 0; i < collisionData.length; i++) {
-      if (collisionData[i][0] === null) { // option 1: no collision
-      }
-      else if (collisionData[i][0][0] === null) { // option 2: collision, but no longer touching
-        newCollisionHappened = true;
-        suggestedMaybeCenterAndTouchingTypes.push( [collisionData[i][0][1], null, collisionData[i][0][2] ] );
-      }
-      else { // option 3: collision, still touching wall with given type and index)
-        newCollisionHappened = true;
-        suggestedMaybeCenterAndTouchingTypes.push( [collisionData[i][0][1], collisionData[i][1], collisionData[i][0][2] ]);
-      }
+// this function finds the first (non-impotent) collision as the ECB1 moves to the ECBp
+// return type: either null (no collision), or a new center, with a label according to which surface was collided (null if a corner)
+function findAndResolveCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D
+                                , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
+                                , stage : Stage, connectednessFunction : ConnectednessFunction ) : MaybeCenterAndTouchingDataType {
+  const suggestedMaybeCenterAndTouchingData : Array<MaybeCenterAndTouchingDataType> = [null]; // initialise list of new collisions
+  const collisionData = wallAndThenWallTypeAndIndexs.map( 
+                                         // [  [ touchingWall, position, s, angularParameter ]  , touchingType ]
+          (wallAndThenWallTypeAndIndex)  => [ findCollision (ecbp, ecb1, position, wallAndThenWallTypeAndIndex[0]
+                                                            , wallAndThenWallTypeAndIndex[1][0], wallAndThenWallTypeAndIndex[1][1]
+                                                            , stage, connectednessFunction )
+                                            , wallAndThenWallTypeAndIndex[1] ]);
+
+  for (let i = 0; i < collisionData.length; i++) {
+    if (collisionData[i][0] !== null) { 
+      suggestedMaybeCenterAndTouchingData.push( [collisionData[i][0][1], collisionData[i][1], collisionData[i][0][2] ]);
     }
-    if (newCollisionHappened) {
-      const newMaybeCenterAndTouchingType = closestCenterAndTouchingType(suggestedMaybeCenterAndTouchingTypes);
-      if (newMaybeCenterAndTouchingType === null) {
-        return oldMaybeCenterAndTouchingType;
-      }
-      else {
-        const vec = new Vec2D( newMaybeCenterAndTouchingType[0].x - position.x, newMaybeCenterAndTouchingType[0].y - position.y);
-        const newecbp = moveECB (ecbp, vec);
-        return (loopOverWalls ( newecbp, ecb1, newMaybeCenterAndTouchingType[0]
-                              , wallAndThenWallTypeAndIndexs
-                              , newMaybeCenterAndTouchingType 
-                              , stage
-                              , connectednessFunction
-                              , passNumber+1 
-                              ) );
+  }
+
+  return closestCenterAndTouchingType(suggestedMaybeCenterAndTouchingData);
+};
+
+// The main collision routine proceeds as follows:
+//   1. Find the first collision (ECB going from ECB1 to ECBp).
+//      - If no collision was found, end.
+//      - Otherwise, record the collision type, and continue.
+//   2. Push out the ECBp according to collision. If collision was with ground/platform, ground the player.
+//   3. Now check for collisions in the orthogonal direction, and push ECBp out if necessary. If collision was with ground/platform, ground the player.
+//   4. Proceed to use an ECB inflation procedure to check whether ECB squashing is necessary.
+//   5. Return the new player position, relevant collision surfaces, and ECB squash factor.
+export function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
+                                 , walls     : Array<LabelledSurface>
+                                 , ceilings  : Array<LabelledSurface>
+                                 , grounds   : Array<LabelledSurface>
+                                 , platforms : Array<LabelledSurface>
+                                 , stage : Stage
+                                 , connectednessFunction : ConnectednessFunction
+                                 , oldGroundedSurface : null | [string, number]
+                                 , notIgnoringPlatforms : bool ) : [ Vec2D // new position
+                                                                   , null | [string, number] // first collision label
+                                                                   , null | [string, number] // second collision label
+                                                                   , null | number // ECB scaling factor
+                                                                   ] {
+  let relevantSurfaces = walls;
+  let ecbSquashFactor = null;
+  let groundedSurface = oldGroundedSurface;
+
+  if (groundedSurface === null) {
+    relevantSurfaces = relevantSurfaces.concat(ceilings).concat(grounds);
+    if (notIgnoringPlatforms) {
+      relevantSurfaces = relevantSurfaces.concat(platforms);
+    }
+  }
+
+  let nonIgnoredSurfaces = walls.concat(ceilings).concat(grounds);
+  if (notIgnoringPlatforms) {
+    nonIgnoredSurfaces = nonIgnoredSurfaces.concat(platforms);
+  }
+
+  // first, find the closest collision
+  const closestCollision = findAndResolveCollision(ecbp, ecb1, position, relevantSurfaces, stage, connectednessFunction);
+  if (closestCollision === null) {
+    // if no collision occured, end
+    return [position, null, null, null];
+  }
+  else {
+    // otherwise, check collision in orthogonal direction
+    const [newPosition, surfaceTypeAndIndex, angularParameter] = closestCollision;
+    const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
+    const newecbp = moveECB (ecbp, vec);
+
+    if (surfaceTypeAndIndex !== null && (surfaceTypeAndIndex[0] === "g" || surfaceTypeAndIndex[0] === "p")) {
+      // ground the player if collision with ground occurred
+      groundedSurface = surfaceTypeAndIndex;
+    }
+
+    let orthRelevantSurfaces = null;
+
+    if (surfaceTypeAndIndex === null || surfaceTypeAndIndex[0] === "l" || surfaceTypeAndIndex[0] === "r") {
+      if (groundedSurface === null) {
+        orthRelevantSurfaces = grounds.concat(ceilings);
+        if (notIgnoringPlatforms) {
+          orthRelevantSurfaces = orthRelevantSurfaces.concat(platforms);
+        }
       }
     }
     else {
-      return oldMaybeCenterAndTouchingType;
+      orthRelevantSurfaces = walls;
+    }
+
+    if (orthRelevantSurfaces === null) {
+      // if there are no orthogonal collisions, run ECB squashing routine
+      ecbSquashFactor = inflateECB (newecbp, angularParameter, nonIgnoredSurfaces);
+      return [newPosition, surfaceTypeAndIndex, null, ecbSquashFactor];
+    }
+    else {
+      // otherwise, find the closest one
+      const orthClosestCollision = findAndResolveCollision( newecbp, ecb1, position, orthRelevantSurfaces, stage, connectednessFunction);
+      if (orthClosestCollision === null) {
+        // if there are no orthogonal collisions, run ECB squashing routine
+        ecbSquashFactor = inflateECB (newecbp, angularParameter, nonIgnoredSurfaces);
+        return [newPosition, surfaceTypeAndIndex, null, ecbSquashFactor];
+      }
+      else {
+        const [orthNewPosition, orthSurfaceTypeAndIndex, orthAngularParameter] = orthClosestCollision;
+        const orthVec = new Vec2D(orthNewPosition.x - position.x, orthNewPosition.y - position.y);
+        const orthNewecbp = moveECB (ecbp, orthVec);
+        ecbSquashFactor = inflateECB (orthNewecbp, orthAngularParameter, nonIgnoredSurfaces);
+        return [orthNewPosition, surfaceTypeAndIndex, orthSurfaceTypeAndIndex, ecbSquashFactor];
+      }
     }
   }
 };
+
+// finds the ECB squash factor by inflating the ECB from the point on the ECB given by the angular parameter
+function inflateECB ( ecb : ECB, angularParameter : number, relevantSurfaces : Array<LabelledSurface>) : null | number {
+  return 1; // TODO
+}
+
 
 // finds the maybeCenterAndTouchingType collision with smallest sweeping parameter
 // recall that a 'maybeCenterAndTouchingType' is given by one of the following three options: 
@@ -842,7 +888,7 @@ function loopOverWalls( ecbp : ECB, ecb1 : ECB, position : Vec2D
 //          option 2: '[newPosition, false, s]             (collision, but no longer touching) 
 //          option 3: '[newPosition, wallTypeAndIndex, s]' (collision, still touching wall with given type and index)
 // s is the sweeping parameter
-function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeCenterAndTouchingTypeType>) : MaybeCenterAndTouchingTypeType {
+function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeCenterAndTouchingDataType>) : MaybeCenterAndTouchingDataType {
   let newMaybeCenterAndTouchingType = null;
   let start = -1;
   const l = maybeCenterAndTouchingTypes.length;
@@ -881,29 +927,4 @@ function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeC
     }
     return newMaybeCenterAndTouchingType;
   }
-};
-
-export function groundedECBSquashFactor( ecb : ECB, ceilings : Array< [Vec2D, Vec2D]> ) : null | number {
-  const ceilingYValues = ceilings.map ( (ceil) => {
-    if (ecb[0].x < ceil[0].x || ecb[0].x > ceil[1].x) {
-      return null;
-    } 
-    else {
-      return coordinateIntercept( [ ecb[0], ecb[2] ] , ceil).y;
-    }
-  } );
-  const lowestCeilingYValue = findSmallestWithin(ceilingYValues, ecb[0].y, ecb[2].y);
-  if (lowestCeilingYValue === null) {
-    return null;
-  }
-  else {
-    return ( (lowestCeilingYValue - ecb[0].y) / (ecb[2].y - ecb[0].y) );
-  }
-};
-
-export function getNewMaybeCenterAndTouchingType(ecbp : ECB, ecb1 : ECB, position : Vec2D
-                                                , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
-                                                , stage : Stage, connectednessFunction : ConnectednessFunction) : MaybeCenterAndTouchingTypeType {
-  // start at loop number 1, with no collisions given
-  return loopOverWalls(ecbp, ecb1, position, wallAndThenWallTypeAndIndexs, null, stage, connectednessFunction, 1 );
 };
