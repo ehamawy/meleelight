@@ -283,7 +283,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
   let otherDir = "l";
   let sign = 1;
   let wallBottomOrLeft = wallBottom;
-  let wallTopOrRight = wallRight;
+  let wallTopOrRight = wallTop;
   let xOrY = 1;
   let yOrX = 0;
   if (wallType === "l" || wallType === "g" || wallType === "p") {
@@ -320,7 +320,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
       nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex] , dir);
       if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
         console.log("'getPushout': giving up with top ECB point, no relevant wall below.");
-        return [ new Vec2D (largestPushoutSoFar, 0), null];
+        return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), null];
       }
       else {
         nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
@@ -333,7 +333,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
     else if (ecbp[2].y <= wallTop.y) {
       // push out top point directly
       console.log("'getPushout': directly pushing out top ECB point.");
-      return [ new Vec2D (coordinateIntercept(wall, hLineThrough(ecbp[2])).x - ecbp[2].x, 0), 2];
+      return [ new Vec2D (coordinateIntercept(wall, hLineThrough(ecbp[2])).x - ecbp[2].x + sign * additionalOffset, 0), 2];
     }
     else if (ecbp[same].y < wallTop.y) {
       // push out at corner if possible, otherwise defer to next wall
@@ -347,7 +347,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
           angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[top].x - ecbp[same].x) * (2-same);
         }
         console.log("'getPushout': pushing out top ECB corner (no relevant wall above).");
-        return [ new Vec2D (largestPushoutSoFar, 0), angularParameter];
+        return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), angularParameter];
       }
       else {
         nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
@@ -363,7 +363,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
             angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[2].x - ecbp[same].x) * (2-same);
           }
           console.log("'getPushout': pushing out top ECB corner (wall above is useless).");
-          return [ new Vec2D (largestPushoutSoFar, 0), angularParameter];
+          return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), angularParameter];
         }
         else {
           // cannot push out to corner
@@ -384,7 +384,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
       nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex] , otherDir);
       if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
         console.log("'getPushout': pushing out side ECB point (no relevant wall above).");
-        return [ new Vec2D (largestPushoutSoFar, 0), angularParameter];
+        return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), angularParameter];
       }
       else {
         nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
@@ -415,7 +415,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
     else if (ecbp[0].y >= wallBottom.y) {
       // push out bottom point directly
       console.log("'getPushout': directly pushing out bottom ECB point.");
-      return [ new Vec2D (coordinateIntercept(wall, hLineThrough(ecbp[0])).x - ecbp[0].x, 0), 0];
+      return [ new Vec2D (coordinateIntercept(wall, hLineThrough(ecbp[0])).x - ecbp[0].x + sign * additionalOffset, 0), 0];
     }
     else if (ecbp[same].y > wallBottom.y) {
       // push out at corner if possible, otherwise defer to next wall
@@ -434,7 +434,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
           }
         }
         console.log("'getPushout': pushing out bottom ECB corner (no relevant wall below).");
-        return [ new Vec2D (largestPushoutSoFar, 0), angularParameter];
+        return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), angularParameter];
       }
       else {
         nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
@@ -455,7 +455,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
             }
           }
           console.log("'getPushout': pushing out bottom ECB corner (wall below is useless).");
-          return [ new Vec2D (largestPushoutSoFar, 0), angularParameter];
+          return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), angularParameter];
         }
         else {
           // cannot push out to corner
@@ -476,7 +476,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
       nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
       if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
         console.log("'getPushout': pushing out side ECB point (no relevant wall below).");
-        return [ new Vec2D (largestPushoutSoFar, 0), angularParameter];
+        return [ new Vec2D (largestPushoutSoFar + sign * additionalOffset, 0), angularParameter];
       }
       else {
         nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
@@ -509,7 +509,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
       nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], otherDir);
       if (nextSurfaceTypeAndIndex === null || !wallTypesAreSimilar(nextSurfaceTypeAndIndex[0],wallType)) {
         console.log("'getPushout': giving up with same-side ECB point, no relevant surface forwards.");
-        return [ putXOrYCoord(largestPushoutSoFar, yOrX), angularParameter];
+        return [ putXOrYCoord(largestPushoutSoFar + sign * additionalOffset, yOrX), angularParameter];
       }
       else {
         nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
@@ -528,7 +528,7 @@ function getPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string,
         angularParameter = same;
       }
       console.log("'getPushout': directly pushing out same-side ECB point.");
-      return [ putXOrYCoord(largestPushoutSoFar, yOrX), angularParameter];
+      return [ putXOrYCoord(largestPushoutSoFar + sign * additionalOffset, yOrX), angularParameter];
     }
   }
 }
@@ -822,6 +822,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
                               , null | [string, number] // collision surface type and index
                               , null | number // ECB scaling factor
                               ] {
+  console.log("'collisionRoutine': pass number "+passNumber+".");
   let touchingData = oldTouchingData;
   let ecbSquashFactor = oldecbSquashFactor;
 
