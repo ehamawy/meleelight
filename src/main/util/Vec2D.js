@@ -19,3 +19,12 @@ export function getXOrYCoord(vec : Vec2D, xOrY : number) : number {
     return vec.y;
   }
 };
+
+export function putXOrYCoord( coord : number, xOrY : number) : Vec2D {
+  if (xOrY === 0) {
+    return ( new Vec2D ( coord, 0 ) );
+  }
+  else {
+    return ( new Vec2D ( 0, coord ) );
+  }
+};

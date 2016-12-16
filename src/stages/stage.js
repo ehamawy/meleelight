@@ -21,3 +21,21 @@ export type Stage = {
   offset        : [number, number],
   connected?    : Array< [boolean, Array< [ string, number] > ] >
 }
+
+export function getSurfaceFromStage ( surfaceTypeAndIndex : [string, number], stage : Stage) : [Vec2D, Vec2D] {
+  const surfaceType  = surfaceTypeAndIndex[0];
+  const surfaceIndex = surfaceTypeAndIndex[1];
+  switch (surfaceType) {
+    case "l":
+      return stage.wallL   [surfaceIndex];
+    case "r":
+      return stage.wallR   [surfaceIndex];
+    case "p":
+      return stage.platform[surfaceIndex];
+    case "g":
+    default:
+      return stage.ground  [surfaceIndex];
+    case "c":
+      return stage.ceiling [surfaceIndex];
+  }
+};
