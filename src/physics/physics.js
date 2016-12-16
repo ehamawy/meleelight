@@ -8,7 +8,7 @@ import {gameSettings} from "../settings";
 import {actionStates, turboAirborneInterrupt, turboGroundedInterrupt, turnOffHitboxes} from "./actionStateShortcuts";
 import {getLaunchAngle, getHorizontalVelocity, getVerticalVelocity, getHorizontalDecay, getVerticalDecay} from "./hitDetection";
 import {lostStockQueue} from "../main/render";
-import {collisionRoutine, coordinateIntercept, additionalOffset} from "./environmentalCollision";
+import {runCollisionRoutine, coordinateIntercept, additionalOffset} from "./environmentalCollision";
 import {deepCopyObject} from "../main/util/deepCopyObject";
 import {drawVfx} from "../main/vfx/drawVfx";
 import {activeStage} from "../stages/activeStage";
@@ -655,29 +655,15 @@ export function physics (i : number, input : any) : void {
       }
     }
 
-    let relevantGround = null;
-
-    if (alreadyGrounded && stillGrounded) {
-      relevantGround = ["g", player[i].phys.onSurface[1]];
-      if (player[i].phys.onSurface[0] === 1) {
-        relevantGround[0] = "p";
-      }
-    }
-
-    // type : [ Vec2D       , null | [string, number], null | [string, number], null | number     ]
-    //        [ new position, first collision label  , second collision label , ECB squash factor ]
-    const collisionData = collisionRoutine ( player[i].phys.ECBp
-                                           , player[i].phys.ECB1
-                                           , player[i].phys.pos
-                                           , stageWalls
-                                           , stageCeilings
-                                           , stageGrounds
-                                           , stagePlatforms
-                                           , activeStage
-                                           , connectednessFunction
-                                           , relevantGround
-                                           , notIgnoringPlatforms
-                                           );
+    // type : [ Vec2D       , null | [string, number], null | number     ]
+    //        [ new position, collision label        , ECB squash factor ]
+    const collisionData = runCollisionRoutine ( player[i].phys.ECBp
+                                              , player[i].phys.ECB1
+                                              , player[i].phys.pos
+                                              , relevantSurfaces
+                                              , activeStage
+                                              , connectednessFunction
+                                              );
 
     if (collisionData[1] === null) {
       // no collision, do nothing
@@ -686,51 +672,30 @@ export function physics (i : number, input : any) : void {
       const newPosition = collisionData[0];
       const ecbpBottom = new Vec2D ( player[i].phys.ECBp[0].x + newPosition.x - player[i].phys.pos.x
                                    , player[i].phys.ECBp[0].y + newPosition.y - player[i].phys.pos.y);
-      const firstCollisionLabel = collisionData[1][0];
-      const firstCollisionIndex = collisionData[1][1];
+      const surfaceLabel = collisionData[1][0];
+      const surfaceIndex = collisionData[1][1];        
 
-      // prioritise grounding the player if a ground collision occurred
-      if      (firstCollisionLabel === "g") {
-        dealWithGroundCollision  (i, alreadyGrounded, newPosition, ecbpBottom, firstCollisionIndex, input);
-      }
-      else if (firstCollisionLabel === "p") {
-        dealWithPlatformCollision(i, alreadyGrounded, newPosition, ecbpBottom, firstCollisionIndex, input);
-      }
-      else if (collisionData[2] !== null && collisionData[2][0] === "g") {
-        dealWithGroundCollision  (i, alreadyGrounded, newPosition, ecbpBottom, collisionData[2][1], input);
-      }
-      else if (collisionData[2] !== null && collisionData[2][0] === "p") {
-        dealWithPlatformCollision(i, alreadyGrounded, newPosition, ecbpBottom, collisionData[2][1], input);
-      }
-      // next, ceilings
-      else if (collisionData[1][0] === "c" || ( collisionData[2] !== null && collisionData[2][0] === "c")) {
-        dealWithCeilingCollision (i, newPosition, ecbOffset, input);
-      }
-      // finally, walls
-      // the following line is a workaround for flow giving up
-      else if (firstCollisionLabel === "l" ) {
-        notTouchingWalls[0] = false;
-        dealWithWallCollision    (i, newPosition, "l", firstCollisionIndex, input);
-      }
-      else if (firstCollisionLabel === "r") {
-        notTouchingWalls[1] = false;
-        dealWithWallCollision    (i, newPosition, "r", firstCollisionIndex, input);
-      }
-      else if (collisionData[2] !== null) {
-        const secondCollisionLabel = collisionData[2][0];
-        const secondCollisionIndex = collisionData[2][1];
-        if (secondCollisionLabel === "l") {
+      switch(surfaceLabel) {
+        case "l": // player touching left wall
           notTouchingWalls[0] = false;
-          dealWithWallCollision    (i, newPosition, "l", secondCollisionIndex, input);
-        }
-        else if (secondCollisionLabel === "r") {
+          dealWithWallCollision(i, newPosition, "l", surfaceIndex, input);
+          break;
+        case "r": // player touching right wall
           notTouchingWalls[1] = false;
-          dealWithWallCollision    (i, newPosition, "r", secondCollisionIndex, input);
-        }
-      }
-      // and finally, corners
-      else {
-        dealWithCollision(i, newPosition);
+          dealWithWallCollision(i, newPosition, "r", surfaceIndex, input);
+          break;
+        case "g": // player landed on ground
+          dealWithGroundCollision(i, alreadyGrounded, newPosition, ecbpBottom, surfaceIndex, input);
+          break;
+        case "c": // player touching ceiling
+          dealWithCeilingCollision(i, newPosition, ecbOffset, input);
+          break;
+        case "p": // player landed on platform
+          dealWithPlatformCollision(i, alreadyGrounded, newPosition, ecbpBottom, surfaceIndex, input);
+          break;
+        default:
+          console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform");
+          break;
       }
 
     // TODO: ECB squashing

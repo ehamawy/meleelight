@@ -20,6 +20,7 @@ type ECB = [Vec2D, Vec2D, Vec2D, Vec2D];
 
 
 const magicAngle : number = Math.PI/6;
+const maximumCollisionDetectionPasses = 15;
 export const additionalOffset : number = 0.00001;
 
 // next ECB point index, counterclockwise or clockwise
@@ -100,7 +101,7 @@ export function coordinateIntercept (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec
 function pointSweepingCheck ( wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                             , wallTopOrRight : Vec2D, wallBottomOrLeft : Vec2D
                             , stage : Stage, connectednessFunction : ConnectednessFunction
-                            , xOrY : number, position : Vec2D, same
+                            , xOrY : number, position : Vec2D, same : number
                             , ecb1Same : Vec2D, ecbpSame : Vec2D
                             , ecb1Top  : Vec2D, ecbpTop  : Vec2D ) : null | [null | string, Vec2D, number, number] {
 
@@ -710,19 +711,45 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
 
     let closestPointCollision = null;
 
-    // now we run some checks to see if the relevant projected ECB point was already on the other side of the wall
-    // this prevents collisions being detected when going through a surface in reverse
-
-    if ( checkTopInstead && !isOutside( ecb1[2], wallRight, wallLeft, "c" ) ) { 
-      console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", top ECB1 point on the inside side of the wall. ");
+    let yOrX = 0;
+    if (xOrY === 0) {
+      yOrX = 1;
     }
-    else if ( !checkTopInstead && !isOutside ( ecb1[same], wallTopOrRight, wallBottomOrLeft, wallType ) ) {
-      console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", same side ECB1 point on the inside side of the wall. ");
+
+    // the first step is to check whether, even if there is a collision, the wall could actually do anything about it
+    // this check avoids infinite loops: if a wall can't actually push out the ECB to avoid a collision, we consider that no collision is taking place
+    // TODO: refactor this by looking at connected walls too, otherwise collisions can be missed
+    let allowCollision = true;
+
+    if ( extremeSign * getXOrYCoord(ecbp[same], yOrX) > extremeSign * getXOrYCoord(extremeWall, yOrX) ) { // same side projected ECB point beyond extreme point of surface
+      allowCollision = false;
+    }
+    else if (     checkTopInstead // left or right wall where top ECB point can touch
+               && ecbp[2].y > wallTop.y
+               && isOutside( wallTop, ecbp[same], ecbp[2], wallType ) // same-top ECB edge has not gone through to the inside of the top corner
+            ) {
+      allowCollision = false;
+    }
+
+    if (allowCollision === false ) {
+      console.log("'findCollision': "+wallType+""+wallIndex+" is impotent, skipped point sweep.");
     }
     else {
-       // point sweeping check
-      closestPointCollision = pointSweepingCheck ( wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, stage, connectednessFunction
-                                                 , xOrY, position, same, ecb1[same], ecbp[same], ecb1[2], ecbp[2]);
+
+      // now we run some checks to see if the relevant projected ECB point was already on the other side of the wall
+      // this prevents collisions being detected when going through a surface in reverse
+
+      if ( checkTopInstead && !isOutside( ecb1[2], wallRight, wallLeft, "c" ) ) { 
+        console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", top ECB1 point on the inside side of the wall. ");
+      }
+      else if ( !checkTopInstead && !isOutside ( ecb1[same], wallTopOrRight, wallBottomOrLeft, wallType ) ) {
+        console.log("'findCollision': no point collision with "+wallType+""+wallIndex+", same side ECB1 point on the inside side of the wall. ");
+      }
+      else {
+         // point sweeping check
+        closestPointCollision = pointSweepingCheck ( wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, stage, connectednessFunction
+                                                   , xOrY, position, same, ecb1[same], ecbp[same], ecb1[2], ecbp[2]);
+      }
     }
 
   
@@ -764,9 +791,9 @@ type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 
 // this function finds the first (non-impotent) collision as the ECB1 moves to the ECBp
 // return type: either null (no collision), or a new center, with a label according to which surface was collided (null if a corner)
-function findAndResolveCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D
-                                , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
-                                , stage : Stage, connectednessFunction : ConnectednessFunction ) : MaybeCenterAndTouchingDataType {
+function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D
+                             , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
+                             , stage : Stage, connectednessFunction : ConnectednessFunction ) : MaybeCenterAndTouchingDataType {
   const suggestedMaybeCenterAndTouchingData : Array<MaybeCenterAndTouchingDataType> = [null]; // initialise list of new collisions
   const collisionData = wallAndThenWallTypeAndIndexs.map( 
                                          // [  [ touchingWall, position, s, angularParameter ]  , touchingType ]
@@ -784,94 +811,67 @@ function findAndResolveCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D
   return closestCenterAndTouchingType(suggestedMaybeCenterAndTouchingData);
 };
 
-// The main collision routine proceeds as follows:
-//   1. Find the first collision (ECB going from ECB1 to ECBp).
-//      - If no collision was found, end.
-//      - Otherwise, record the collision type, and continue.
-//   2. Push out the ECBp according to collision. If collision was with ground/platform, ground the player.
-//   3. Now check for collisions in the orthogonal direction, and push ECBp out if necessary. If collision was with ground/platform, ground the player.
-//   4. Proceed to use an ECB inflation procedure to check whether ECB squashing is necessary.
-//   5. Return the new player position, relevant collision surfaces, and ECB squash factor.
-export function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
-                                 , walls     : Array<LabelledSurface>
-                                 , ceilings  : Array<LabelledSurface>
-                                 , grounds   : Array<LabelledSurface>
-                                 , platforms : Array<LabelledSurface>
-                                 , stage : Stage
-                                 , connectednessFunction : ConnectednessFunction
-                                 , oldGroundedSurface : null | [string, number]
-                                 , notIgnoringPlatforms : bool ) : [ Vec2D // new position
-                                                                   , null | [string, number] // first collision label
-                                                                   , null | [string, number] // second collision label
-                                                                   , null | number // ECB scaling factor
-                                                                   ] {
-  let relevantSurfaces = walls;
-  let ecbSquashFactor = null;
-  let groundedSurface = oldGroundedSurface;
+// this function loops over all walls/surfaces it is provided, calculating the collision offsets that each ask for,
+// and at each iteration returning the smallest possible offset (i.e. collision with smallest sweeping parameter)
+function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
+                          , relevantSurfaces : Array<LabelledSurface>
+                          , stage : Stage
+                          , connectednessFunction : ConnectednessFunction
+                          , oldTouchingData : null | [string, number, number] // surface type, surface index, angular parameter
+                          , oldecbSquashFactor : null | number
+                          , passNumber : number
+                          ) : [ Vec2D // new position
+                              , null | [string, number] // collision surface type and index
+                              , null | number // ECB scaling factor
+                              ] {
+  let touchingData = oldTouchingData;
+  let ecbSquashFactor = oldecbSquashFactor;
 
-  if (groundedSurface === null) {
-    relevantSurfaces = relevantSurfaces.concat(ceilings).concat(grounds);
-    if (notIgnoringPlatforms) {
-      relevantSurfaces = relevantSurfaces.concat(platforms);
+
+  if (passNumber > maximumCollisionDetectionPasses) {
+    if (touchingData !== null) {
+      ecbSquashFactor = inflateECB (ecbp, touchingData[2], relevantSurfaces);    
+      return [position, [touchingData[0], touchingData[1]], ecbSquashFactor];
     }
-  }
-
-  let nonIgnoredSurfaces = walls.concat(ceilings).concat(grounds);
-  if (notIgnoringPlatforms) {
-    nonIgnoredSurfaces = nonIgnoredSurfaces.concat(platforms);
-  }
-
-  // first, find the closest collision
-  const closestCollision = findAndResolveCollision(ecbp, ecb1, position, relevantSurfaces, stage, connectednessFunction);
-  if (closestCollision === null) {
-    // if no collision occured, end
-    return [position, null, null, null];
+    else {
+      return [position, null, ecbSquashFactor];
+    }
+    
   }
   else {
-    // otherwise, check collision in orthogonal direction
-    const [newPosition, surfaceTypeAndIndex, angularParameter] = closestCollision;
-    const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
-    const newecbp = moveECB (ecbp, vec);
-
-    if (surfaceTypeAndIndex !== null && (surfaceTypeAndIndex[0] === "g" || surfaceTypeAndIndex[0] === "p")) {
-      // ground the player if collision with ground occurred
-      groundedSurface = surfaceTypeAndIndex;
-    }
-
-    let orthRelevantSurfaces = null;
-
-    if (surfaceTypeAndIndex === null || surfaceTypeAndIndex[0] === "l" || surfaceTypeAndIndex[0] === "r") {
-      if (groundedSurface === null) {
-        orthRelevantSurfaces = grounds.concat(ceilings);
-        if (notIgnoringPlatforms) {
-          orthRelevantSurfaces = orthRelevantSurfaces.concat(platforms);
-        }
-      }
-    }
-    else {
-      orthRelevantSurfaces = walls;
-    }
-
-    if (orthRelevantSurfaces === null) {
-      // if there are no orthogonal collisions, run ECB squashing routine
-      ecbSquashFactor = inflateECB (newecbp, angularParameter, nonIgnoredSurfaces);
-      return [newPosition, surfaceTypeAndIndex, null, ecbSquashFactor];
-    }
-    else {
-      // otherwise, find the closest one
-      const orthClosestCollision = findAndResolveCollision( newecbp, ecb1, position, orthRelevantSurfaces, stage, connectednessFunction);
-      if (orthClosestCollision === null) {
-        // if there are no orthogonal collisions, run ECB squashing routine
-        ecbSquashFactor = inflateECB (newecbp, angularParameter, nonIgnoredSurfaces);
-        return [newPosition, surfaceTypeAndIndex, null, ecbSquashFactor];
+    // first, find the closest collision
+    const closestCollision = findClosestCollision(ecbp, ecb1, position, relevantSurfaces, stage, connectednessFunction);
+    if (closestCollision === null) {
+      // if no collision occured, end
+      if (touchingData !== null) {
+        ecbSquashFactor = inflateECB (ecbp, touchingData[2], relevantSurfaces);
+        return [position, [touchingData[0], touchingData[1]], ecbSquashFactor];
       }
       else {
-        const [orthNewPosition, orthSurfaceTypeAndIndex, orthAngularParameter] = orthClosestCollision;
-        const orthVec = new Vec2D(orthNewPosition.x - position.x, orthNewPosition.y - position.y);
-        const orthNewecbp = moveECB (ecbp, orthVec);
-        ecbSquashFactor = inflateECB (orthNewecbp, orthAngularParameter, nonIgnoredSurfaces);
-        return [orthNewPosition, surfaceTypeAndIndex, orthSurfaceTypeAndIndex, ecbSquashFactor];
+        return [position, null, ecbSquashFactor];
       }
+    }
+
+    else {
+      // otherwise, loop
+      const [newPosition, surfaceTypeAndIndex, angularParameter] = closestCollision;
+      const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
+      const newecbp = moveECB (ecbp, vec);
+
+      // update collision label data
+      if (touchingData === null) {
+        if (surfaceTypeAndIndex !== null) {
+          touchingData = [surfaceTypeAndIndex[0], surfaceTypeAndIndex[1], angularParameter];
+        }
+      }
+      // prioritise ground collisions when reporting the type of the last collision
+      // warning: we are not using **position** information from just ground collisions, but from latest collision
+      else if (surfaceTypeAndIndex !== null && ( surfaceTypeAndIndex[0] === "g" || surfaceTypeAndIndex[0] === "p")) {
+        touchingData = [surfaceTypeAndIndex[0], surfaceTypeAndIndex[1], angularParameter];
+      }
+
+      return collisionRoutine( newecbp, ecb1, newPosition, relevantSurfaces, stage, connectednessFunction
+                             , touchingData, oldecbSquashFactor, passNumber+1);
     }
   }
 };
@@ -927,4 +927,17 @@ function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeC
     }
     return newMaybeCenterAndTouchingType;
   }
+};
+
+
+export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D
+                                   , relevantSurfaces : Array<LabelledSurface>
+                                   , stage : Stage
+                                   , connectednessFunction : ConnectednessFunction
+                                   ) : [ Vec2D // new position
+                                       , null | [string, number] // collision surface type and index
+                                       , null | number // ECB scaling factor
+                                       ] {
+  return collisionRoutine( ecbp, ecb1, position, relevantSurfaces, stage, connectednessFunction
+                         , null, null, 1);
 };
