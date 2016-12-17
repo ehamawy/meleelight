@@ -283,7 +283,6 @@ export function physics (i : number, input : any) : void {
   player[i].phys.posPrev = new Vec2D(player[i].phys.pos.x,player[i].phys.pos.y);
   player[i].phys.facePrev = player[i].phys.face;
   deepCopyObject(true,player[i].phys.prevFrameHitboxes,player[i].hitboxes);
-  const playerState = actionStates[characterSelections[i]][player[i].actionState];
 
   if (player[i].hit.hitlag > 0){
     player[i].hit.hitlag--;
@@ -384,7 +383,7 @@ export function physics (i : number, input : any) : void {
     }
 
     player[i].prevActionState = player[i].actionState;
-    playerState.main(i,input);
+    actionStates[characterSelections[i]][player[i].actionState].main(i,input);
 
     if (player[i].shocked > 0) {
       player[i].shocked--;
@@ -562,7 +561,7 @@ export function physics (i : number, input : any) : void {
   /* global ecb */
   declare var ecb : any;
   let ecbOffset = ecb[characterSelections[i]][player[i].actionState][frame - 1];
-  if (playerState.dead) {
+  if (actionStates[characterSelections[i]][player[i].actionState].dead) {
     ecbOffset = [0, 0, 0, 0];
   }
   /*switch (player[i].actionState){
@@ -588,7 +587,7 @@ export function physics (i : number, input : any) : void {
   ];
 
 
-  if (!playerState.ignoreCollision) {
+  if (!actionStates[characterSelections[i]][player[i].actionState].ignoreCollision) {
 
     const alreadyGrounded = player[i].phys.grounded;
     let stillGrounded = true;
@@ -647,7 +646,7 @@ export function physics (i : number, input : any) : void {
 
     let relevantSurfaces = stageWalls;
 
-    const notIgnoringPlatforms = ( !playerState.canPassThrough || (input[i][0].lsY > -0.56) );
+    const notIgnoringPlatforms = ( !actionStates[characterSelections[i]][player[i].actionState].canPassThrough || (input[i][0].lsY > -0.56) );
     if (!alreadyGrounded || !stillGrounded) {
       relevantSurfaces = relevantSurfaces.concat(stageCeilings).concat(stageGrounds);
       if ( notIgnoringPlatforms ) {
@@ -719,10 +718,10 @@ export function physics (i : number, input : any) : void {
     }
     if (!stillGrounded) {
       player[i].phys.grounded = false;
-      if (typeof playerState.airborneState !== 'undefined') {
-        player[i].actionState = playerState.airborneState;
+      if (typeof actionStates[characterSelections[i]][player[i].actionState].airborneState !== 'undefined') {
+        player[i].actionState = actionStates[characterSelections[i]][player[i].actionState].airborneState;
       } else {
-        if (playerState.missfoot && backward) {
+        if (actionStates[characterSelections[i]][player[i].actionState].missfoot && backward) {
           actionStates[characterSelections[i]].MISSFOOT.init(i,input);
         } else {
           actionStates[characterSelections[i]].FALL.init(i,input);
@@ -820,10 +819,10 @@ export function physics (i : number, input : any) : void {
             y > player[i].phys.ledgeSnapBoxF.max.y) {
 
           if (activeStage.ledge[j][1] === 0) {
-            if (playerState.canGrabLedge[0]) {
+            if (actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[0]) {
               lsBF = j;
             }
-          } else if (playerState.canGrabLedge[1]) {
+          } else if (actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
             lsBF = j;
           }
         }
@@ -833,17 +832,17 @@ export function physics (i : number, input : any) : void {
             y > player[i].phys.ledgeSnapBoxF.max.y) {
 
           if (activeStage.ledge[j][1] === 1) {
-            if (playerState.canGrabLedge[0]) {
+            if (actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[0]) {
               lsBB = j;
             }
-          } else if (playerState.canGrabLedge[1]) {
+          } else if (actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
             lsBB = j;
           }
         }
       }
       if (player[i].phys.cVel.y < 0 && input[i][0].lsY > -0.5) {
         if (lsBF > -1) {
-          if (activeStage.ledge[lsBF][1] * -2 + 1 === player[i].phys.face || playerState.canGrabLedge[1]) {
+          if (activeStage.ledge[lsBF][1] * -2 + 1 === player[i].phys.face || actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
             player[i].phys.onLedge = lsBF;
             player[i].phys.ledgeRegrabTimeout = 30;
             player[i].phys.face = activeStage.ledge[lsBF][1] * -2 + 1;
@@ -852,7 +851,7 @@ export function physics (i : number, input : any) : void {
             actionStates[characterSelections[i]].CLIFFCATCH.init(i,input);
           }
         } else if (lsBB > -1) {
-          if (activeStage.ledge[lsBB][1] * -2 + 1 === player[i].phys.face || playerState.canGrabLedge[1]) {
+          if (activeStage.ledge[lsBB][1] * -2 + 1 === player[i].phys.face || actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
             player[i].phys.onLedge = lsBB;
             player[i].phys.ledgeRegrabTimeout = 30;
             player[i].phys.face = activeStage.ledge[lsBB][1] * -2 + 1;
@@ -865,7 +864,7 @@ export function physics (i : number, input : any) : void {
     }
   }
 
-  if (!playerState.dead && player[i].actionState !== "SLEEP") {
+  if (!actionStates[characterSelections[i]][player[i].actionState].dead && player[i].actionState !== "SLEEP") {
     let state = 0;
     if (player[i].phys.pos.x < activeStage.blastzone.min.x) {
       state = "DEADLEFT";
