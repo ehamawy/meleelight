@@ -263,10 +263,11 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
   }
 };
 
-
-function getHorizPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
-                        , oldLargestPushout : number
-                        , stage : Stage, connectednessFunction : ConnectednessFunction) : [Vec2D, null | number] {
+// TODO: explain this function, and include diagrams
+function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
+                        , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
+                        , oldTotalPushout : number, previousPushout : number
+                        , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number] {
   console.log("'getHorizPushout': working with "+wallType+""+wallIndex+".");
 
   const wallRight  = extremePoint(wall, "r");
@@ -278,250 +279,545 @@ function getHorizPushout( ecbp : ECB, same, wall : [Vec2D, Vec2D], wallType : st
   const bottomECBAngle = lineAngle([ecbp[0]   , ecbp[same]]);
   const topECBAngle    = lineAngle([ecbp[same], ecbp[2]   ]);
 
-  let largestPushoutSoFar = oldLargestPushout;
-  let dir      = "r";
-  let otherDir = "l";
-  let sign = 1;
-  if (wallType === "l" || wallType === "g" || wallType === "p") {
-    dir      = "l";
-    otherDir = "r";
-    sign = -1;
+  const pt = relevantECBPointFromWall(ecbp, wallBottom, wallTop, wallType);
+
+  let situation = "u"; // in which direction we might need to check for a wall to continue pushout routine, default: above
+  if (ecbp[pt].y < wallBottom.y) {
+    situation = "d"; // in this case, we might need to check below
   }
-  let additionalPushout = additionalOffset;
-  if (wallType === "l") {
-    additionalPushout = -additionalOffset;
+
+  let UDSign = 1;
+  let wallForward  = wallTop;
+  let wallBackward = wallBottom;
+  if (situation === "d") {
+    UDSign = -1;
+    wallForward  = wallBottom;
+    wallBackward = wallTop;
+  }
+
+  let dir = "l"; // clockwise to go up right walls or down left walls
+  if ((situation === "d") !== (wallType === "l")) {
+    dir = "r"; // counterclockwise to go down right walls or up left walls
+  }
+
+  let fPt = 2;
+  let bPt = 0;
+  if (situation === "d") {
+    fPt = 0;
+    bPt = 2;
   }
 
   // initialisations
-  let nextSurfaceTypeAndIndex = null;
-  let nextSurface = null;
-  let nextBottom  = null;
-  let nextTop     = null;
-  let nextAngle   = null;
-  let thisPushout = 0;
-  let intercept = new Vec2D(0,0);
-  let angularParameter = null;
+  let intercept = null;
+  let intercept2 = null;
+  let pushout = 0;
+  let nextWallTypeAndIndex = null;
+  let nextWall = null;
+  let nextWallBottom = null;
+  let nextWallTop = null;
+  let nextWallForward = null;
+  let nextWallBackward = null;
+  let nextPt = same;
+  let t = 0;
+  let angularParameter = same;
+  let totalPushout = oldTotalPushout;
   // end of initialisations
 
-  if (sign * wallAngle < sign * topECBAngle) {
-    // top point collision
-    if (ecbp[2].y < wallBottom.y) {
-      // defer to next wall if possible, otherwise give up
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex] , dir);
-      if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
-        console.log("'getHorizPushout': giving up with top ECB point, no relevant wall below.");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), null];
+  // ---------------------------------------------------------------------------------------------------------------
+  // start main pushout logic
+
+
+  // case 1, ECB colliding at top vertex if going upwards, or at bottom vertex if going downwards
+  if (pt === fPt) {
+    if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+      // directly push out and end immediately thereafter
+      intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+      pushout = pushoutClamp(intercept.x - ecbp[pt].x, wallType);
+      if (Math.abs(totalPushout) > Math.abs(pushout)) {
+        return [totalPushout, null];
       }
       else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        console.log("'getHorizPushout': top ECB point, deferring to wall below.");
-        return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                         , largestPushoutSoFar
-                         , stage, connectednessFunction );
+        return [pushout, pt];
       }
     }
-    else if (ecbp[2].y <= wallTop.y) {
-      // push out top point directly
-      console.log("'getHorizPushout': directly pushing out top ECB point.");
-      return [ new Vec2D (coordinateIntercept(wall, hLineThrough(ecbp[2])).x - ecbp[2].x + additionalPushout, 0), 2];
-    }
-    else if (ecbp[same].y < wallTop.y) {
-      // push out at corner if possible, otherwise defer to next wall
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex] , otherDir);
-      if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
-        // can push out to corner: no wall above
-        intercept = coordinateIntercept( [ecbp[same], ecbp[2]], hLineThrough(wallTop) );
-        thisPushout = pushoutClamp(wallTop.x - intercept.x, wallType);
-        if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-          largestPushoutSoFar = thisPushout;
-          angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[2].x - ecbp[same].x) * (2-same);
-        }
-        console.log("'getHorizPushout': pushing out top ECB corner (no relevant wall above).");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-      }
-      else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        nextBottom = extremePoint(nextSurface, "b");
-        nextTop    = extremePoint(nextSurface, "t");
-        nextAngle = lineAngle([nextBottom, nextTop]);
-        if (sign * nextAngle > sign * topECBAngle) { 
-          // can push out to corner because the slope of the wall above allows it
-          intercept = coordinateIntercept( [ecbp[same], ecbp[2]], hLineThrough(wallTop) );
-          thisPushout = pushoutClamp(wallTop.x - intercept.x, wallType);
-          if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-            largestPushoutSoFar = thisPushout;
-            angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[2].x - ecbp[same].x) * (2-same);
+    else {
+      nextWallTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
+      if (nextWallTypeAndIndex === null || nextWallTypeAndIndex[0] !== wallType) {
+        // slide ECB along wall, at most so that ECB backwards point is at wallForward
+        // if we stop short, put the ECBp there and end
+        // otherwise, do the physics calculation to get pushout, and end
+        if ( UDSign * ecbp[same].y <= UDSign * wallForward.y) {
+          // stopped short (didn't even get to the same side ECB point, let alone the backwards point)
+          // pushout at corner and end
+          [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
+          pushout = pushoutClamp(pushout, wallType);
+          if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            return [totalPushout, null];
           }
-          console.log("'getHorizPushout': pushing out top ECB corner (wall above is useless).");
-          return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
+          else {
+            angularParameter = getAngularParameter(t, same, pt);
+            return [pushout, angularParameter];
+          }
+        }
+        else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
+          // stopped short of ECB backwards point
+          // pushout at corner and end
+          [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
+          pushout = pushoutClamp(pushout, wallType);
+          if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            return [totalPushout, null];
+          }
+          else {
+            angularParameter = getAngularParameter(t, same, bPt);
+            return [pushout, angularParameter];
+          }
         }
         else {
-          // cannot push out to corner
-          console.log("'getHorizPushout': cannot push out top ECB corner, deferring to wall above.");
-          return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                           , largestPushoutSoFar
-                           , stage, connectednessFunction );
+          // didn't stop short, do the physics
+          intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
+          pushout = wallForward.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return [totalPushout, null];
+        }
+      }
+      else {
+        nextWall = getSurfaceFromStage(nextWallTypeAndIndex, stage);
+        nextWallTop    = extremePoint(nextWall, "t");
+        nextWallBottom = extremePoint(nextWall, "b");
+        nextPt = relevantECBPointFromWall(ecbp, nextWallBottom, nextWallTop, wallType);
+        if (nextPt === pt) {
+          // slide ECB along wall, so that ECB point is at wallForward
+          // then do the physics calculation to get pushout, and pass on to the next wall
+          intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
+          pushout = wallForward.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);
+        }
+        else if (nextPt === same) {
+          // slide ECB along wall, at most so that ECB same point is at wallForward
+          // if we stop short, put the ECBp there and end
+          // otherwise, do the physics calculation to get pushout, and pass on to the next wall
+          if ( UDSign * ecbp[same].y <= UDSign * wallForward.y) {
+            // stopped short of ECB same-side point
+            // pushout at corner and end
+            [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
+            pushout = pushoutClamp(pushout, wallType);
+            if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              return [totalPushout, null];
+            }
+            else {
+              angularParameter = getAngularParameter(t, same, pt);
+              return [pushout, angularParameter];
+            }
+          }
+          else {
+            // didn't stop short, do the physics
+            intercept = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
+            pushout = wallForward.x - intercept.x;
+            totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            return getHorizPushout( ecb1, ecbp, same
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , stage, connectednessFunction);
+          }
+        }
+        else { // nextPt === bPt
+          // slide ECB along wall, at most so that ECB backwards point is at wallForward
+          // if we stop short, put the ECBp there and end
+          // otherwise, do the physics calculation to get pushout, and pass on to the next wall
+          if ( UDSign * ecbp[same].y <= UDSign * wallForward.y) {
+            // stopped short (didn't even get to the same side ECB point, let alone the backwards point)
+            // pushout at corner and end
+            [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
+            pushout = pushoutClamp(pushout, wallType);
+            if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              return [totalPushout, null];
+            }
+            else {
+              angularParameter = getAngularParameter(t, same, pt);
+              return [pushout, angularParameter];
+            }
+          }
+          else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
+            // stopped short of ECB backwards point
+            // pushout at corner and end
+            [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
+            pushout = pushoutClamp(pushout, wallType);
+            if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              return [totalPushout, null];
+            }
+            else {
+              angularParameter = getAngularParameter(t, same, pt);
+              return [pushout, angularParameter];
+            }
+          }
+          else {
+            // didn't stop short, do the physics
+            intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
+            pushout = wallForward.x - intercept.x;
+            totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);
+          }
         }
       }
     }
-    else { // ecbp[same].y > wallTop.y
-      // defer to next wall if possible, otherwise push out side point
-      thisPushout = pushoutClamp(wallTop.x - ecbp[same].x, wallType);
-      if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-        largestPushoutSoFar = thisPushout;
-        angularParameter = same;
-      }
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex] , otherDir);
-      if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
-        console.log("'getHorizPushout': pushing out side ECB point (no relevant wall above).");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
+  }
+
+  // case 2, ECB colliding at bottom vertex if going upwards, or at top vertex if going downwards
+  else if (pt === bPt) {
+    nextWallTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
+    if (nextWallTypeAndIndex === null || nextWallTypeAndIndex[0] !== wallType) {
+      // slide ECB along wall, so that ECB backwards point is at wallForward
+      // if we stop short, pushout directly and end
+      // otherwise, do the physics and end
+      if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+        // stopped short, directly push out backwards ECB point
+        intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+        pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
+        if (Math.abs(totalPushout) > Math.abs(pushout)) {
+          return [totalPushout, null];
+        }
+        else {
+          return [pushout, pt];
+        }
       }
       else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        console.log("'getHorizPushout': cannot push out side ECB point, deferring to wall above.");
-        return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                         , largestPushoutSoFar
-                         , stage, connectednessFunction );
+        // didn't stop short, do the physics and end
+        intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
+        pushout = wallForward.x - intercept.x;
+        totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+        return [totalPushout, null];
       }
     }
+    else {
+      nextWall = getSurfaceFromStage(nextWallTypeAndIndex, stage);
+      nextWallTop    = extremePoint(nextWall, "t");
+      nextWallBottom = extremePoint(nextWall, "b");
+      if (situation === "u") {
+        nextWallForward  = nextWallTop;
+        nextWallBackward = nextWallBottom;
+      }
+      else {
+        nextWallForward  = nextWallBottom;
+        nextWallBackward = nextWallTop;
+      }
+      nextPt = relevantECBPointFromWall(ecbp, nextWallBottom, nextWallTop, wallType);
+      if (nextPt === bPt) {
+        // we can slide ECB all the way to have ECB backwards point at wallForward
+        // if we stop short, pushout and end
+        // otherwise, do the physics and pass on to the next wall
+        if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+          // stopped short, directly push out backwards ECB point
+          intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+          pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
+          if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            return [totalPushout, null];
+          }
+          else {
+            return [pushout, pt];
+          }
+        }
+        else {
+          intercept = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
+          pushout = wallForward.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);
+        }
+      }
+      else if (nextPt === same) {
+        // slide the ECB along wall, until the same side ECB point collides with next wall
+        // if we stop short, pushout and end, otherwise run the physics and pass on to the next wall
+        // use the line that is parallel to the wall, but shifted vertically by (ecbp[same].y-ecbp[bPt].y) to find this point of collision
+        intercept = coordinateIntercept( [new Vec2D (wallBottom.x, wallBottom.y + ecbp[same].y-ecbp[bPt].y), new Vec2D (wallTop.x, wallTop.y + ecbp[same].y-ecbp[bPt].y)], nextWall);
+        if (UDSign * intercept.y > UDSign * nextWallForward.y || UDSign * intercept.y < UDSign * nextWallBackward.y) {
+          if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+            // stopped short, directly push out backwards ECB point
+            intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+            pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
+            if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              return [totalPushout, null];
+            }
+            else {
+              return [pushout, pt];
+            }
+          }
+          else {
+            // can slide the backwards ECB point all the way to wallForward
+            // warning: we are ignoring the possibility that the ECB can enter in contact at en edge on the corner nextWallForward
+            // this will be caught by the edge sweeping routine, and not the point sweeping routine
+            intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
+            pushout = wallForward.x - intercept2.x;
+            totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            return getHorizPushout( ecb1, ecbp, same
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , stage, connectednessFunction);
+          }
+        }
+        else {
+          // do the physics to find the pushout, with ECB same side point being in contact with next wall
+          intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
+          pushout = intercept2.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);
+        }
+
+      }
+      else { // nextPt === fPt
+        // slide the ECB along wall, until the forward ECB point collides with next wall
+        // if we stop short, pushout and end, otherwise run the physics and pass on to the next wall
+        // use the line that is parallel to the wall, but shifted vertically by (ecbp[fPt].y - ecbp[bPt].y) to find this point of collision
+        intercept = coordinateIntercept( [new Vec2D (wallBottom.x, wallBottom.y + ecbp[fPt].y-ecbp[bPt].y), new Vec2D (wallTop.x, wallTop.y + ecbp[fPt].y-ecbp[bPt].y)], nextWall);
+        if (UDSign * intercept.y > UDSign * nextWallForward.y || UDSign * intercept.y < UDSign * nextWallBackward.y) {
+          if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+            // stopped short, directly push out backwards ECB point
+            intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+            pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
+            if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              return [totalPushout, null];
+            }
+            else {
+              return [pushout, pt];
+            }
+          }
+          else {
+            // can slide the backwards ECB point all the way to wallForward
+            // warning: we are ignoring the possibility that the ECB can enter in contact at en edge on the corner nextWallForward
+            // this will be caught by the edge sweeping routine, and not the point sweeping routine
+            intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
+            pushout = wallForward.x - intercept2.x;
+            totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            return getHorizPushout( ecb1, ecbp, same
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , stage, connectednessFunction);
+          }
+        }
+        else {
+          // do the physics to find the pushout, with ECB forward point being in contact with next wall
+          intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[fPt], ecbp[fPt]]);
+          pushout = intercept2.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);
+        }
+      }
+    }
+  }
+
+  // case 3, ECB colliding at same-side vertex (typical case for walls)
+  else { // pt === same
+    nextWallTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
+    if (nextWallTypeAndIndex === null || nextWallTypeAndIndex[0] !== wallType) {
+      // slide ECB along wall, at most so that ECB backwards point is at wallForward
+      // if we stop short, put the ECBp there and end
+      // otherwise, do the physics calculation to get pushout, and end
+      if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+        // stopped short: can push out side ECB point directly, so do that
+        intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
+        pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
+        if (Math.abs(totalPushout) > Math.abs(pushout)) {
+          return [totalPushout, null];
+        }
+        else {
+          return [pushout, pt];
+        }
+      }
+      else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
+        // stopped short of putting ECB backwards point at wallForward
+        // pushout at corner and end
+        [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
+        pushout = pushoutClamp(pushout, wallType);
+        if (Math.abs(totalPushout) > Math.abs(pushout)) {
+          return [totalPushout, null];
+        }
+        else {
+          angularParameter = getAngularParameter(t, same, bPt);
+          return [pushout, angularParameter];
+        }
+      }
+      else {
+        // didn't stop short, do the physics
+        intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
+        pushout = wallForward.x - intercept.x;
+        totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+        return [totalPushout, null];
+      }
+    }
+    else {
+      nextWall = getSurfaceFromStage(nextWallTypeAndIndex, stage);
+      nextWallTop    = extremePoint(nextWall, "t");
+      nextWallBottom = extremePoint(nextWall, "b");
+      if (situation === "u") {
+        nextWallForward  = nextWallTop;
+        nextWallBackward = nextWallBottom;
+      }
+      else {
+        nextWallForward  = nextWallBottom;
+        nextWallBackward = nextWallTop;
+      }
+      nextPt = relevantECBPointFromWall(ecbp, nextWallBottom, nextWallTop, wallType);
+      if (nextPt === fPt) {
+        // slide ECB along wall, at most so that forward ECB point is in contact with next wall
+        // use the line that is parallel to the wall, but shifted horizontally by (ecbp[fPt].x-ecbp[same].x) to find where the ECB forward point enters in contact with next wall
+        intercept = coordinateIntercept ( [new Vec2D (wallBottom.x+ecbp[fPt].x-ecbp[same].x,wallBottom.y), new Vec2D (wallTop.x+ecbp[fPt].x-ecbp[same].x,wallTop.y)], nextWall);
+        if (UDSign * intercept.y > UDSign * nextWallForward.y || UDSign * intercept.y < UDSign * nextWallBackward.y) {
+          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+            // stopped short: can push out side ECB point directly, so do that
+            intercept2 = coordinateIntercept( wall, hLineThrough(ecbp[same]));
+            pushout = pushoutClamp(intercept2.x - ecbp[same].x, wallType);
+            if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              return [totalPushout, null];
+            }
+            else {
+              return [pushout, pt];
+            }
+          }
+          else {
+            // can slide same side ECB point all the way to wallForward
+            // warning: we are ignoring the possibility that the ECB can enter in contact at an edge on the corner nextWallForward
+            // this will be caught by the edge sweeping routine, and not the point sweeping routine
+            intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
+            pushout = wallForward.x - intercept2.x;
+            totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            return getHorizPushout( ecb1, ecbp, same
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , stage, connectednessFunction);
+          }
+        }
+        else {
+          // do the physics to find the pushout, with ECB forward point being put in contact with next wall
+          intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[fPt], ecbp[fPt]]);
+          pushout = intercept2.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);     
+        }
+      }
+      else if (nextPt === same) {
+        // slide ECB point to wallForward (we know we will not stop short), calculate offset, and pass on to the next wall
+        intercept = coordinateIntercept ( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
+        pushout = wallForward.x - intercept.x;
+        totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+        return getHorizPushout( ecb1, ecbp, same
+                              , nextWall, wallType, nextWallTypeAndIndex[1]
+                              , totalPushout, pushout
+                              , stage, connectednessFunction);
+      }
+      else { // nextPt === bPt
+        // slide ECB along wall, at most so that ECB backwards point is at wallForward
+        // if we stop short, put the ECBp there and end
+        // otherwise, do the physics calculation to get pushout, and pass on to the next wall
+        if (UDSign * ecbp[pt] <= UDSign * wallForward.y) {
+          // stopped short: can push out same side ECB point directly, so do that
+          intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
+          pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
+          if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            return [totalPushout, null];
+          }
+          else {
+            return [pushout, pt];
+          }
+        }
+        else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
+          // stopped short of ECB backwards point
+          // pushout at corner and end
+          [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
+          pushout = pushoutClamp(pushout, wallType);
+          if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            return [totalPushout, null];
+          }
+          else {
+            angularParameter = getAngularParameter(t, same, bPt);
+            return [pushout, angularParameter];
+          }
+        }
+        else {
+          // didn't stop short, do the physics
+          intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
+          pushout = wallForward.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , stage, connectednessFunction);
+        }
+      }
+    }    
+  }
+
+};
+
+
+
+function relevantECBPointFromWall(ecb : ECB, wallBottom : Vec2D, wallTop : Vec2D, wallType : string) : number {
+  let sign = 1;
+  let same = 3;
+  if (wallType === "l") {
+    same = 1;
+    sign = -1;
+  }
+
+  const wallAngle      = lineAngle([wallBottom, wallTop   ]);
+  const bottomECBAngle = lineAngle([ecb[0]    , ecb[same]]);
+  const topECBAngle    = lineAngle([ecb[same] , ecb[2]   ]);
+ 
+  if (sign * wallAngle < sign * topECBAngle) {
+    return 2; // top point collision
   }
   else if (sign * wallAngle > sign * bottomECBAngle) {
-    // bottom point collision
-    if (ecbp[0].y > wallTop.y) {
-      // defer to next wall if possible, otherwise give up
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], otherDir);
-      if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
-        console.log("'getHorizPushout': giving up with bottom ECB point, no relevant wall above.");
-        return [ new Vec2D (largestPushoutSoFar, 0), null];
-      }
-      else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        console.log("'getHorizPushout': bottom ECB point, deferring to wall above.");
-        return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                         , largestPushoutSoFar
-                         , stage, connectednessFunction);
-      }
-    }
-    else if (ecbp[0].y >= wallBottom.y) {
-      // push out bottom point directly
-      console.log("'getHorizPushout': directly pushing out bottom ECB point.");
-      return [ new Vec2D (coordinateIntercept(wall, hLineThrough(ecbp[0])).x - ecbp[0].x + additionalPushout, 0), 0];
-    }
-    else if (ecbp[same].y > wallBottom.y) {
-      // push out at corner if possible, otherwise defer to next wall
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
-      if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
-        // can push out to corner: no wall below
-        intercept = coordinateIntercept( [ecbp[same], ecbp[0]], hLineThrough(wallBottom) );
-        thisPushout = pushoutClamp(wallBottom.x - intercept.x, wallType);
-        if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-          largestPushoutSoFar = thisPushout;
-          if (same === 3) {
-            angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[0].x - ecbp[same].x) * (4-same);
-          }
-          else { // same === 1
-            angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[0].x - ecbp[same].x) * (0-same);
-          }
-        }
-        console.log("'getHorizPushout': pushing out bottom ECB corner (no relevant wall below).");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-      }
-      else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        nextBottom = extremePoint(nextSurface, "b");
-        nextTop    = extremePoint(nextSurface, "t");
-        nextAngle = lineAngle([nextBottom, nextTop]);
-        if (sign * nextAngle < sign * bottomECBAngle) {
-          // can push out to corner ecause the slope of the wall below allows it
-          intercept = coordinateIntercept( [ecbp[same], ecbp[0]], hLineThrough(wallBottom) );
-          thisPushout = pushoutClamp(wallBottom.x - intercept.x, wallType);
-          if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-            largestPushoutSoFar = thisPushout;
-            if (same === 3) {
-              angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[0].x - ecbp[same].x) * (4-same);
-            }
-            else { // same === 1
-              angularParameter = same + (intercept.x - ecbp[same].x) / (ecbp[0].x - ecbp[same].x) * (0-same);
-            }
-          }
-          console.log("'getHorizPushout': pushing out bottom ECB corner (wall below is useless).");
-          return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-        }
-        else {
-          // cannot push out to corner
-          console.log("'getHorizPushout': cannot push out bottom ECB corner, deferring to wall below.");
-          return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                           , largestPushoutSoFar
-                           , stage, connectednessFunction);
-        }
-      }
-    }
-    else { // ecbp[same].y < wallBottom.y
-      // push out side point if possible, otherwise defer to next wall
-      thisPushout = pushoutClamp( wallBottom.x - ecbp[same].x, wallType);
-      if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-        largestPushoutSoFar = thisPushout;
-        angularParameter = same;
-      }
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
-      if (nextSurfaceTypeAndIndex === null || nextSurfaceTypeAndIndex[0] !== wallType) {
-        console.log("'getHorizPushout': pushing out side ECB point (no relevant wall below).");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-      }
-      else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        console.log("'getHorizPushout': cannot push out side ECB point, deferring to wall below.");
-        return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                         , largestPushoutSoFar
-                         , stage, connectednessFunction);
-      }
-    }
+    return 0; // bottom point
   }
-  else { // we are now simultaneously working with horizontal and vertical pushout
-    // same-side point collision
-    if (ecbp[same].y < wallBottom.y) {
-      // defer to next wall below/to the left
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
-      if (nextSurfaceTypeAndIndex === null || !wallTypesAreSimilar(nextSurfaceTypeAndIndex[0],wallType)) {
-        console.log("'getHorizPushout': giving up with same-side ECB point, no adjacent surface backwards.");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-      }
-      else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        console.log("'getHorizPushout': same-side ECB point, deferring to adjacent surface backwards.");
-        return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                         , largestPushoutSoFar
-                         , stage, connectednessFunction);
-      }
-    }
-    else if (ecbp[same].y > wallTop.y) {
-      // defer to next wall above/to the right
-      nextSurfaceTypeAndIndex = connectednessFunction( [wallType, wallIndex], otherDir);
-      if (nextSurfaceTypeAndIndex === null || !wallTypesAreSimilar(nextSurfaceTypeAndIndex[0],wallType)) {
-        console.log("'getHorizPushout': giving up with same-side ECB point, no relevant surface forwards.");
-        return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-      }
-      else {
-        nextSurface = getSurfaceFromStage(nextSurfaceTypeAndIndex, stage);
-        console.log("'getHorizPushout': same-side ECB point, deferring to adjacent surface forwards.");
-        return getHorizPushout( ecbp, same, nextSurface, nextSurfaceTypeAndIndex[0], nextSurfaceTypeAndIndex[1]
-                         , largestPushoutSoFar
-                         , stage, connectednessFunction);
-      }
-    }
-    else { // ecbp[same].y <= wallTop.y && ecbp[same].y >= wallBottom.y
-      // push out side point directly
-      intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]) );
-      thisPushout = pushoutClamp( intercept.x - ecbp[same].x, wallType);
-      if (Math.abs(thisPushout) > Math.abs(largestPushoutSoFar)) {
-        largestPushoutSoFar = thisPushout;
-        angularParameter = same;
-      }
-      console.log("'getHorizPushout': directly pushing out same-side ECB point.");
-      return [ new Vec2D (largestPushoutSoFar + additionalPushout, 0), angularParameter];
-    }
+  else {
+    return same; // side point
   }
-}
+
+};
+
+function putEdgeOnCorner( point1 : Vec2D, point2 : Vec2D, corner : Vec2D, wallType : string) : [number, number] {
+  const intercept = coordinateIntercept( [point1, point2], hLineThrough(corner));
+  const pushout = pushoutClamp(corner.x - intercept.x, wallType);
+  const parameter = (intercept.x - point1.x) / (point2.x - point1.x);
+  return [pushout, parameter];
+};
+
+function getAngularParameter ( t : number, same : number, other : number) {
+  if (same === 3 && other === 0) {
+    return ((1-t)*3 + t*4);
+  }
+  else if (same === 0 && other === 3) {
+    return ((1-t)*4 + t*3);
+  }
+  else {
+    return ((1-t)*same + t*other);
+  }
+};
+
+function biggestPushout( push1 : number, push2 : number, wallType : string) : number {
+  if (wallType === "r") {
+    return Math.max(push1, push2);
+  }
+  else {
+    return Math.min(push1, push2);
+  }
+};
 
 // touching data is null, or: new position, maybe wall type and index, sweeping parameter
 type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], number];
@@ -727,20 +1023,25 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
                                  , xOrY, same
                                  , ecb1, ecbp);
 
+    let additionalPushout = additionalOffset;
+    if (wallType === "l" || wallType === "c") {
+      additionalPushout = - additionalOffset;
+    }
+
     if (s !== null) { // collision did occur
       if (wallType === "l" || wallType === "r") {
-        const [pushoutVector, maybeAngularParameter] = getHorizPushout( ecbp, same, wall, wallType, wallIndex
-                                                                      , 0
+        // TODO: add check that wall was not in ignore list, this ignore list might need to be reset under certain circumstances but this is going to be tricky
+        const [pushout, maybeAngularParameter] = getHorizPushout( ecb1, ecbp, same
+                                                                      , wall, wallType, wallIndex
+                                                                      , 0, 0
                                                                       , stage, connectednessFunction );
-        console.log("'findCollision': pushout vector is ("+pushoutVector.x+","+pushoutVector.y+").");
-        if (pushoutVector.x !== 0 || pushoutVector.y !== 0) { //  collision was not impotent
-          const newPointPosition = new Vec2D ( position.x + pushoutVector.x, position.y + pushoutVector.y);
-          closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
-        }
+        console.log("'findCollision': horizontal pushout value is ("+pushout+".");
+        const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
+        closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
       }
       else {
         const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
-                                          , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y);
+                                          , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
         closestPointCollision = [wallType, newPointPosition, s, same];
       }
     }
