@@ -659,6 +659,7 @@ export function physics (i : number, input : any) : void {
     const collisionData = runCollisionRoutine ( player[i].phys.ECBp
                                               , player[i].phys.ECB1
                                               , player[i].phys.pos
+                                              , player[i].phys.posPrev
                                               , relevantSurfaces
                                               , activeStage
                                               , connectednessFunction

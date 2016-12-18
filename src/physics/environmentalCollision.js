@@ -267,6 +267,7 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
 function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
                         , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                         , oldTotalPushout : number, previousPushout : number
+                        , situation
                         , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number] {
   console.log("'getHorizPushout': working with "+wallType+""+wallIndex+".");
 
@@ -280,11 +281,6 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
   const topECBAngle    = lineAngle([ecbp[same], ecbp[2]   ]);
 
   const pt = relevantECBPointFromWall(ecbp, wallBottom, wallTop, wallType);
-
-  let situation = "u"; // in which direction we might need to check for a wall to continue pushout routine, default: above
-  if (ecbp[pt].y < wallBottom.y) {
-    situation = "d"; // in this case, we might need to check below
-  }
 
   let UDSign = 1;
   let wallForward  = wallTop;
@@ -394,6 +390,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);
         }
         else if (nextPt === same) {
@@ -421,6 +418,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
+                                  , situation
                                   , stage, connectednessFunction);
           }
         }
@@ -462,6 +460,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);
           }
         }
@@ -530,6 +529,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);
         }
       }
@@ -560,6 +560,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
+                                  , situation
                                   , stage, connectednessFunction);
           }
         }
@@ -571,6 +572,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);
         }
 
@@ -602,6 +604,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
+                                  , situation
                                   , stage, connectednessFunction);
           }
         }
@@ -613,6 +616,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);
         }
       }
@@ -697,6 +701,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
+                                  , situation
                                   , stage, connectednessFunction);
           }
         }
@@ -708,6 +713,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);     
         }
       }
@@ -719,6 +725,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         return getHorizPushout( ecb1, ecbp, same
                               , nextWall, wallType, nextWallTypeAndIndex[1]
                               , totalPushout, pushout
+                              , situation
                               , stage, connectednessFunction);
       }
       else { // nextPt === bPt
@@ -757,6 +764,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
+                                , situation
                                 , stage, connectednessFunction);
         }
       }
@@ -830,7 +838,7 @@ type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], nu
 // the angular parameter is the location at which the ECB is now touching the surface after being pushed out, from 0 to 4
 // terminology in the comments: a wall is a segment with an inside and an outside,
 // which is contained in an infinite line, extending both ways, which also has an inside and an outside
-function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
+function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                        , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                        , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [null | string, Vec2D, number, number | null] {
 
@@ -1030,11 +1038,16 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D
 
     if (s !== null) { // collision did occur
       if (wallType === "l" || wallType === "r") {
+        let situation = "u";
+        if (position.y < prevPosition.y) {
+          situation = "d";
+        }
         // TODO: add check that wall was not in ignore list, this ignore list might need to be reset under certain circumstances but this is going to be tricky
         const [pushout, maybeAngularParameter] = getHorizPushout( ecb1, ecbp, same
-                                                                      , wall, wallType, wallIndex
-                                                                      , 0, 0
-                                                                      , stage, connectednessFunction );
+                                                                , wall, wallType, wallIndex
+                                                                , 0, 0
+                                                                , situation
+                                                                , stage, connectednessFunction );
         console.log("'findCollision': horizontal pushout value is ("+pushout+".");
         const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
         closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
@@ -1088,13 +1101,14 @@ type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 
 // this function finds the first (non-impotent) collision as the ECB1 moves to the ECBp
 // return type: either null (no collision), or a new center, with a label according to which surface was collided (null if a corner)
-function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D
+function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                              , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
                              , stage : Stage, connectednessFunction : ConnectednessFunction ) : MaybeCenterAndTouchingDataType {
   const suggestedMaybeCenterAndTouchingData : Array<MaybeCenterAndTouchingDataType> = [null]; // initialise list of new collisions
   const collisionData = wallAndThenWallTypeAndIndexs.map( 
                                          // [  [ touchingWall, position, s, angularParameter ]  , touchingType ]
-          (wallAndThenWallTypeAndIndex)  => [ findCollision (ecbp, ecb1, position, wallAndThenWallTypeAndIndex[0]
+          (wallAndThenWallTypeAndIndex)  => [ findCollision ( ecbp, ecb1, position, prevPosition
+                                                            , wallAndThenWallTypeAndIndex[0]
                                                             , wallAndThenWallTypeAndIndex[1][0], wallAndThenWallTypeAndIndex[1][1]
                                                             , stage, connectednessFunction )
                                             , wallAndThenWallTypeAndIndex[1] ]);
@@ -1110,7 +1124,7 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D
 
 // this function loops over all walls/surfaces it is provided, calculating the collision offsets that each ask for,
 // and at each iteration returning the smallest possible offset (i.e. collision with smallest sweeping parameter)
-function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
+function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                           , relevantSurfaces : Array<LabelledSurface>
                           , stage : Stage
                           , connectednessFunction : ConnectednessFunction
@@ -1138,7 +1152,9 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
   }
   else {
     // first, find the closest collision
-    const closestCollision = findClosestCollision(ecbp, ecb1, position, relevantSurfaces, stage, connectednessFunction);
+    const closestCollision = findClosestCollision( ecbp, ecb1, position, prevPosition
+                                                 , relevantSurfaces
+                                                 , stage, connectednessFunction);
     if (closestCollision === null) {
       // if no collision occured, end
       if (touchingData !== null) {
@@ -1168,7 +1184,9 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D
         touchingData = [surfaceTypeAndIndex[0], surfaceTypeAndIndex[1], angularParameter];
       }
 
-      return collisionRoutine( newecbp, ecb1, newPosition, relevantSurfaces, stage, connectednessFunction
+      return collisionRoutine( newecbp, ecb1, newPosition, position // might want to keep this 4th argument as prevPosition and not update it to position?
+                             , relevantSurfaces
+                             , stage, connectednessFunction
                              , touchingData, oldecbSquashFactor, passNumber+1);
     }
   }
@@ -1229,7 +1247,7 @@ function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeC
 };
 
 
-export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D
+export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                                    , relevantSurfaces : Array<LabelledSurface>
                                    , stage : Stage
                                    , connectednessFunction : ConnectednessFunction
@@ -1237,7 +1255,9 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D
                                        , null | [string, number] // collision surface type and index
                                        , null | number // ECB scaling factor
                                        ] {
-  return collisionRoutine( ecbp, ecb1, position, relevantSurfaces, stage, connectednessFunction
+  return collisionRoutine( ecbp, ecb1, position, prevPosition
+                         , relevantSurfaces
+                         , stage, connectednessFunction
                          , null, null, 1);
 };
 
