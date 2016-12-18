@@ -1,4 +1,5 @@
 // @flow
+/* eslint-disable */
 
 import {Vec2D, getXOrYCoord, putXOrYCoord} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
@@ -527,6 +528,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         nextWallForward  = nextWallBottom;
         nextWallBackward = nextWallTop;
       }
+      
       nextPt = relevantECBPointFromWall(ecbp, nextWallBottom, nextWallTop, wallType);
       if (nextPt === bPt) {
         // we can slide ECB all the way to have ECB backwards point at wallForward
@@ -560,13 +562,19 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       else if (nextPt === same) {
         // slide the ECB along wall, until the same side ECB point collides with next wall
         // if we stop short, pushout and end, otherwise run the physics and pass on to the next wall
-        // use the line that is parallel to the wall, but shifted vertically by (ecbp[same].y-ecbp[bPt].y) to find this point of collision
-        intercept = coordinateIntercept( [new Vec2D (wallBottom.x, wallBottom.y + ecbp[same].y-ecbp[bPt].y), new Vec2D (wallTop.x, wallTop.y + ecbp[same].y-ecbp[bPt].y)], nextWall);
-        if (UDSign * intercept.y >= UDSign * nextWallForward.y || UDSign * intercept.y <= UDSign * nextWallBackward.y) {
+        // use the line that is parallel to the wall, but shifted by the vector (ecbp[same]-ecbp[bPt]) to find this point of collision
+        intercept = coordinateIntercept( [ new Vec2D (wallBottom.x + ecbp[same].x - ecbp[bPt].x, wallBottom.y + ecbp[same].y - ecbp[bPt].y)
+                                         , new Vec2D (wallTop.x    + ecbp[same].x - ecbp[bPt].x, wallTop.y    + ecbp[same].y - ecbp[bPt].y)
+                                         ], nextWall);
+        if (    UDSign * intercept.y    >= UDSign * nextWallForward.y 
+             || UDSign * intercept.y    <= UDSign * nextWallBackward.y
+             || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
+             || isOutside(ecbp[nextPt], nextWallBottom, nextWallTop, wallType)
+           ) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short, directly push out backwards ECB point
-            intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
-            pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
+            intercept2 = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+            pushout = pushoutClamp( intercept2.x - ecbp[pt].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
               console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out with total.");
               return [totalPushout, null];
@@ -608,13 +616,19 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       else { // nextPt === fPt
         // slide the ECB along wall, until the forward ECB point collides with next wall
         // if we stop short, pushout and end, otherwise run the physics and pass on to the next wall
-        // use the line that is parallel to the wall, but shifted vertically by (ecbp[fPt].y - ecbp[bPt].y) to find this point of collision
-        intercept = coordinateIntercept( [new Vec2D (wallBottom.x, wallBottom.y + ecbp[fPt].y-ecbp[bPt].y), new Vec2D (wallTop.x, wallTop.y + ecbp[fPt].y-ecbp[bPt].y)], nextWall);
-        if (UDSign * intercept.y >= UDSign * nextWallForward.y || UDSign * intercept.y <= UDSign * nextWallBackward.y) {
+        // use the line that is parallel to the wall, but shifted by the vector (ecbp[fPt] - ecbp[bPt]) to find this point of collision
+        intercept = coordinateIntercept( [ new Vec2D (wallBottom.x + ecbp[fPt].x - ecbp[bPt].x, wallBottom.y + ecbp[fPt].y - ecbp[bPt].y)
+                                         , new Vec2D (wallTop.x    + ecbp[fPt].x - ecbp[bPt].x, wallTop.y    + ecbp[fPt].y - ecbp[bPt].y)
+                                         ], nextWall);
+        if (    UDSign * intercept.y  >= UDSign * nextWallForward.y 
+             || UDSign * intercept.y  <= UDSign * nextWallBackward.y
+             || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
+             || isOutside(ecbp[nextPt], nextWallBottom, nextWallTop, wallType)
+           ) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short, directly push out backwards ECB point
-            intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
-            pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
+            intercept2 = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
+            pushout = pushoutClamp( intercept2.x - ecbp[pt].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
               console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out with total.");
               return [totalPushout, null];
@@ -714,9 +728,15 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       nextPt = relevantECBPointFromWall(ecbp, nextWallBottom, nextWallTop, wallType);
       if (nextPt === fPt) {
         // slide ECB along wall, at most so that forward ECB point is in contact with next wall
-        // use the line that is parallel to the wall, but shifted horizontally by (ecbp[fPt].x-ecbp[same].x) to find where the ECB forward point enters in contact with next wall
-        intercept = coordinateIntercept ( [new Vec2D (wallBottom.x+ecbp[fPt].x-ecbp[same].x,wallBottom.y), new Vec2D (wallTop.x+ecbp[fPt].x-ecbp[same].x,wallTop.y)], nextWall);
-        if (UDSign * intercept.y >= UDSign * nextWallForward.y || UDSign * intercept.y <= UDSign * nextWallBackward.y) {
+        // use the line that is parallel to the wall, but shifted by the vector (ecbp[fPt]-ecbp[same]) to find where the ECB forward point enters in contact with next wall
+        intercept = coordinateIntercept ( [ new Vec2D (wallBottom.x + ecbp[fPt].x - ecbp[same].x, wallBottom.y + ecbp[fPt].y - ecbp[same].y)
+                                          , new Vec2D (wallTop.x    + ecbp[fPt].x - ecbp[same].x, wallTop.y    + ecbp[fPt].y - ecbp[same].y)
+                                          ], nextWall);
+        if (    UDSign * intercept.y  >= UDSign * nextWallForward.y 
+             || UDSign * intercept.y  <= UDSign * nextWallBackward.y
+             || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
+             || isOutside(ecbp[nextPt], nextWallBottom, nextWallTop, wallType)
+           ) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short: can push out side ECB point directly, so do that
             intercept2 = coordinateIntercept( wall, hLineThrough(ecbp[same]));
@@ -792,7 +812,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         // slide ECB along wall, at most so that ECB backwards point is at wallForward
         // if we stop short, put the ECBp there and end
         // otherwise, do the physics calculation to get pushout, and pass on to the next wall
-        if (UDSign * ecbp[pt] <= UDSign * wallForward.y) {
+        if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
           // stopped short: can push out same side ECB point directly, so do that
           intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
           pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
