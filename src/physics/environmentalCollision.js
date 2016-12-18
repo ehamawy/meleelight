@@ -128,21 +128,26 @@ function pointSweepingCheck ( wall : [Vec2D, Vec2D], wallType : string, wallInde
     }
   }
 
-  const s = coordinateInterceptParameter (wall, [relevantECB1Point, relevantECBpPoint]); // need to put wall first
-
-  if (s > 1 || s < 0 || isNaN(s) || s === Infinity) {
-    console.log("'pointSweepingCheck': no collision with "+wallType+" surface, sweeping parameter outside of allowable range.");
-    return null; // no collision
+  if ( !isOutside(relevantECB1Point, wallTopOrRight, wallBottomOrLeft, wallType) || isOutside(relevantECBpPoint, wallTopOrRight, wallBottomOrLeft, wallType) ) {
+    return null; // ECB did not cross the surface in the direction it can stop the ECB
   }
   else {
-    const intersection = new Vec2D (relevantECB1Point.x + s*(relevantECBpPoint.x-relevantECB1Point.x), relevantECB1Point.y + s*(relevantECBpPoint.y-relevantECB1Point.y));
-    if (getXOrYCoord(intersection, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) || getXOrYCoord(intersection, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY)) {
-      console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
+    const s = coordinateInterceptParameter (wall, [relevantECB1Point, relevantECBpPoint]); // need to put wall first
+
+    if (s > 1 || s < 0 || isNaN(s) || s === Infinity) {
+      console.log("'pointSweepingCheck': no collision with "+wallType+" surface, sweeping parameter outside of allowable range.");
       return null; // no collision
     }
     else {
-      console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
-      return s ;
+      const intersection = new Vec2D (relevantECB1Point.x + s*(relevantECBpPoint.x-relevantECB1Point.x), relevantECB1Point.y + s*(relevantECBpPoint.y-relevantECB1Point.y));
+      if (getXOrYCoord(intersection, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) || getXOrYCoord(intersection, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY)) {
+        console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
+        return null; // no collision
+      }
+      else {
+        console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
+        return s ;
+      }
     }
   }
 };
@@ -285,22 +290,19 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
   let UDSign = 1;
   let wallForward  = wallTop;
   let wallBackward = wallBottom;
+  let fPt = 2; // forward ECB point
+  let bPt = 0; // backward ECB point
   if (situation === "d") {
     UDSign = -1;
     wallForward  = wallBottom;
     wallBackward = wallTop;
+    fPt = 0;
+    bPt = 2;
   }
 
   let dir = "l"; // clockwise to go up right walls or down left walls
   if ((situation === "d") !== (wallType === "l")) {
     dir = "r"; // counterclockwise to go down right walls or up left walls
-  }
-
-  let fPt = 2;
-  let bPt = 0;
-  if (situation === "d") {
-    fPt = 0;
-    bPt = 2;
   }
 
   // initialisations
@@ -330,9 +332,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
       pushout = pushoutClamp(intercept.x - ecbp[pt].x, wallType);
       if (Math.abs(totalPushout) > Math.abs(pushout)) {
+        console.log("'getHorizPushout': cur = fwd, ecb = fwd, directly pushing out with total.");
         return [totalPushout, null];
       }
       else {
+        console.log("'getHorizPushout': cur = fwd, ecb = fwd, directly pushing out.");
         return [pushout, pt];
       }
     }
@@ -348,10 +352,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
           pushout = pushoutClamp(pushout, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            console.log("'getHorizPushout': cur = fwd, ecb = same, nxt = null, directly pushing out with total.");
             return [totalPushout, null];
           }
           else {
             angularParameter = getAngularParameter(t, same, pt);
+            console.log("'getHorizPushout': cur = wdf, ecb = same, nxt = null, directly pushing out.");
             return [pushout, angularParameter];
           }
         }
@@ -361,10 +367,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
           pushout = pushoutClamp(pushout, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = null, directly pushing out with total.");
             return [totalPushout, null];
           }
           else {
             angularParameter = getAngularParameter(t, same, bPt);
+            console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = null, directly pushing out.");
             return [pushout, angularParameter];
           }
         }
@@ -373,6 +381,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = null, doing physics and pushing out.");
           return [totalPushout, null];
         }
       }
@@ -387,6 +396,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -403,10 +413,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
             pushout = pushoutClamp(pushout, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = same, directly pushing out with total.");
               return [totalPushout, null];
             }
             else {
               angularParameter = getAngularParameter(t, same, pt);
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = same, directly pushing out.");
               return [pushout, angularParameter];
             }
           }
@@ -415,6 +427,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
             pushout = wallForward.x - intercept.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = same, doing physics and deferring.");
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
@@ -432,10 +445,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
             pushout = pushoutClamp(pushout, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = bwd, directly pushing out with total.");
               return [totalPushout, null];
             }
             else {
               angularParameter = getAngularParameter(t, same, pt);
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = bwd, directly pushing out.");
               return [pushout, angularParameter];
             }
           }
@@ -445,10 +460,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
             pushout = pushoutClamp(pushout, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = bwd, directly pushing out with total.");
               return [totalPushout, null];
             }
             else {
               angularParameter = getAngularParameter(t, same, pt);
+              console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = bwd, directly pushing out.");
               return [pushout, angularParameter];
             }
           }
@@ -457,6 +474,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
             return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -475,14 +493,16 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       // slide ECB along wall, so that ECB backwards point is at wallForward
       // if we stop short, pushout directly and end
       // otherwise, do the physics and end
-      if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+      if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
         // stopped short, directly push out backwards ECB point
         intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
         pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
         if (Math.abs(totalPushout) > Math.abs(pushout)) {
+          console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, directly pushing out with total.");
           return [totalPushout, null];
         }
         else {
+          console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, directly pushing out.");
           return [pushout, pt];
         }
       }
@@ -491,6 +511,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
         pushout = wallForward.x - intercept.x;
         totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+        console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, doing physics and pushing out.");
         return [totalPushout, null];
       }
     }
@@ -511,14 +532,16 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         // we can slide ECB all the way to have ECB backwards point at wallForward
         // if we stop short, pushout and end
         // otherwise, do the physics and pass on to the next wall
-        if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+        if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
           // stopped short, directly push out backwards ECB point
           intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
           pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, directly pushing out with total.");
             return [totalPushout, null];
           }
           else {
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, directly pushing out.");
             return [pushout, pt];
           }
         }
@@ -526,6 +549,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -538,15 +562,17 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         // if we stop short, pushout and end, otherwise run the physics and pass on to the next wall
         // use the line that is parallel to the wall, but shifted vertically by (ecbp[same].y-ecbp[bPt].y) to find this point of collision
         intercept = coordinateIntercept( [new Vec2D (wallBottom.x, wallBottom.y + ecbp[same].y-ecbp[bPt].y), new Vec2D (wallTop.x, wallTop.y + ecbp[same].y-ecbp[bPt].y)], nextWall);
-        if (UDSign * intercept.y > UDSign * nextWallForward.y || UDSign * intercept.y < UDSign * nextWallBackward.y) {
-          if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+        if (UDSign * intercept.y >= UDSign * nextWallForward.y || UDSign * intercept.y <= UDSign * nextWallBackward.y) {
+          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short, directly push out backwards ECB point
             intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
             pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out with total.");
               return [totalPushout, null];
             }
             else {
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out.");
               return [pushout, pt];
             }
           }
@@ -557,6 +583,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept2.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, doing physics and deferring.");
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
@@ -569,6 +596,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
           pushout = intercept2.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = bwd, ecb = same, nxt = same, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -582,15 +610,17 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         // if we stop short, pushout and end, otherwise run the physics and pass on to the next wall
         // use the line that is parallel to the wall, but shifted vertically by (ecbp[fPt].y - ecbp[bPt].y) to find this point of collision
         intercept = coordinateIntercept( [new Vec2D (wallBottom.x, wallBottom.y + ecbp[fPt].y-ecbp[bPt].y), new Vec2D (wallTop.x, wallTop.y + ecbp[fPt].y-ecbp[bPt].y)], nextWall);
-        if (UDSign * intercept.y > UDSign * nextWallForward.y || UDSign * intercept.y < UDSign * nextWallBackward.y) {
-          if (UDSign * ecbp[pt].y < UDSign * wallForward.y) {
+        if (UDSign * intercept.y >= UDSign * nextWallForward.y || UDSign * intercept.y <= UDSign * nextWallBackward.y) {
+          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short, directly push out backwards ECB point
             intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
             pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out with total.");
               return [totalPushout, null];
             }
             else {
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out");
               return [pushout, pt];
             }
           }
@@ -601,6 +631,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept2.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, doing physics and deferring.");
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
@@ -613,6 +644,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[fPt], ecbp[fPt]]);
           pushout = intercept2.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = bwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -635,9 +667,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
         pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
         if (Math.abs(totalPushout) > Math.abs(pushout)) {
+          console.log("'getHorizPushout': cur = same, ecb = same, nxt = null, directly pushing out with total.");
           return [totalPushout, null];
         }
         else {
+          console.log("'getHorizPushout': cur = same, ecb = same, nxt = null, directly pushing out.");
           return [pushout, pt];
         }
       }
@@ -647,10 +681,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
         pushout = pushoutClamp(pushout, wallType);
         if (Math.abs(totalPushout) > Math.abs(pushout)) {
+          console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, directly pushing out with total.");
           return [totalPushout, null];
         }
         else {
           angularParameter = getAngularParameter(t, same, bPt);
+          console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, directly pushing out.");
           return [pushout, angularParameter];
         }
       }
@@ -659,6 +695,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
         pushout = wallForward.x - intercept.x;
         totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+        console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, doing physics and pushing out.");
         return [totalPushout, null];
       }
     }
@@ -679,15 +716,17 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         // slide ECB along wall, at most so that forward ECB point is in contact with next wall
         // use the line that is parallel to the wall, but shifted horizontally by (ecbp[fPt].x-ecbp[same].x) to find where the ECB forward point enters in contact with next wall
         intercept = coordinateIntercept ( [new Vec2D (wallBottom.x+ecbp[fPt].x-ecbp[same].x,wallBottom.y), new Vec2D (wallTop.x+ecbp[fPt].x-ecbp[same].x,wallTop.y)], nextWall);
-        if (UDSign * intercept.y > UDSign * nextWallForward.y || UDSign * intercept.y < UDSign * nextWallBackward.y) {
+        if (UDSign * intercept.y >= UDSign * nextWallForward.y || UDSign * intercept.y <= UDSign * nextWallBackward.y) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short: can push out side ECB point directly, so do that
             intercept2 = coordinateIntercept( wall, hLineThrough(ecbp[same]));
             pushout = pushoutClamp(intercept2.x - ecbp[same].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
+              console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, directly pushing out with total.");
               return [totalPushout, null];
             }
             else {
+              console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, directly pushing out.");
               return [pushout, pt];
             }
           }
@@ -698,6 +737,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
             pushout = wallForward.x - intercept2.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, doing physics and deferring.");
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
@@ -710,6 +750,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[fPt], ecbp[fPt]]);
           pushout = intercept2.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = same, ecb = fwd, nxt = fwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -718,15 +759,34 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         }
       }
       else if (nextPt === same) {
-        // slide ECB point to wallForward (we know we will not stop short), calculate offset, and pass on to the next wall
-        intercept = coordinateIntercept ( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
-        pushout = wallForward.x - intercept.x;
-        totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-        return getHorizPushout( ecb1, ecbp, same
-                              , nextWall, wallType, nextWallTypeAndIndex[1]
-                              , totalPushout, pushout
-                              , situation
-                              , stage, connectednessFunction);
+        // slide ECB along wall, at most so that ECB same-side piont is at wallForward
+        // if we stop short, put the ECBp there and end
+        // otherwise, do the physics calculation to get pushout, and pass on to the next wall
+        if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+          // stopped short: can push out side ECB point directly, so do that
+          intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
+          pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
+          if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, directly pushing out with total.");
+            return [totalPushout, null];
+          }
+          else {
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, directly pushing out.");
+            return [pushout, pt];
+          }
+        }
+        else {
+          // slide ECB point to wallForward, calculate offset, and pass on to the next wall
+          intercept = coordinateIntercept ( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
+          pushout = wallForward.x - intercept.x;
+          totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, doing physics and deferring.");
+          return getHorizPushout( ecb1, ecbp, same
+                                , nextWall, wallType, nextWallTypeAndIndex[1]
+                                , totalPushout, pushout
+                                , situation
+                                , stage, connectednessFunction);
+        }
       }
       else { // nextPt === bPt
         // slide ECB along wall, at most so that ECB backwards point is at wallForward
@@ -737,9 +797,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
           pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = bwd, directly pushing out with total.");
             return [totalPushout, null];
           }
           else {
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = bwd, directly pushing out.");
             return [pushout, pt];
           }
         }
@@ -749,10 +811,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
           pushout = pushoutClamp(pushout, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
+            console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = bwd, directly pushing out with total.");
             return [totalPushout, null];
           }
           else {
             angularParameter = getAngularParameter(t, same, bPt);
+            console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = bwd, directly pushing out.");
             return [pushout, angularParameter];
           }
         }
@@ -761,6 +825,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
+          console.log("'getHorizPushout': cur = same, ecb = bwd, nxt = bwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
@@ -1048,13 +1113,13 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition :
                                                                 , 0, 0
                                                                 , situation
                                                                 , stage, connectednessFunction );
-        console.log("'findCollision': horizontal pushout value is ("+pushout+".");
+        console.log("'findCollision': horizontal pushout value is "+pushout+".");
         const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
         closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
       }
       else {
         const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
-                                          , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
+                                            , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
         closestPointCollision = [wallType, newPointPosition, s, same];
       }
     }
