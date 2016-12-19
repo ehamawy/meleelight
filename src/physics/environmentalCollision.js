@@ -1132,14 +1132,17 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition :
           situation = "d";
         }
         // TODO: add check that wall was not in ignore list, this ignore list might need to be reset under certain circumstances but this is going to be tricky
+        // for the moment I am temporarily just checking that pushout is 0, if so the collision is ignored
         const [pushout, maybeAngularParameter] = getHorizPushout( ecb1, ecbp, same
                                                                 , wall, wallType, wallIndex
                                                                 , 0, 0
                                                                 , situation
                                                                 , stage, connectednessFunction );
         console.log("'findCollision': horizontal pushout value is "+pushout+".");
-        const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
-        closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
+        if (pushout !== 0) {
+          const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
+          closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
+        }
       }
       else {
         const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
