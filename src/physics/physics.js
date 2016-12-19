@@ -2,7 +2,7 @@
 
 
 import {player, characterSelections, percentShake, playerType, edgeOffset, versusMode, showDebug, gameMode} from "../main/main";
-import {framesData} from "../main/characters";
+import {framesData, ecb} from "../main/characters";
 import {sounds} from "../main/sfx";
 import {gameSettings} from "../settings";
 import {actionStates, turboAirborneInterrupt, turboGroundedInterrupt, turnOffHitboxes} from "./actionStateShortcuts";
