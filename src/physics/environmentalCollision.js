@@ -571,9 +571,10 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         if (    UDSign * intercept.y    >= UDSign * nextWallForward.y 
              || UDSign * intercept.y    <= UDSign * nextWallBackward.y
              || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
+             || UDSign * ecbp[nextPt].y <= UDSign * intercept.y
              || isOutside(ecbp[nextPt], nextWallTop, nextWallBottom, wallType)
            ) {
-          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y || UDSign * ecbp[nextPt].y <= UDSign * intercept.y) {
             // stopped short, directly push out backwards ECB point
             intercept2 = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
             pushout = pushoutClamp( intercept2.x - ecbp[pt].x, wallType);
@@ -588,7 +589,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           }
           else {
             // can slide the backwards ECB point all the way to wallForward
-            // warning: we are ignoring the possibility that the ECB can enter in contact at en edge on the corner nextWallForward
+            // warning: we are ignoring the possibility that the ECB can enter in contact at an edge on the corner nextWallForward
             // this will be caught by the edge sweeping routine, and not the point sweeping routine
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept2.x;
@@ -603,8 +604,8 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         }
         else {
           // do the physics to find the pushout, with ECB same side point being in contact with next wall
-          intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
-          pushout = intercept2.x - intercept.x;
+          intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[same], ecbp[same]]);
+          pushout = intercept.x - intercept2.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
           console.log("'getHorizPushout': cur = bwd, ecb = same, nxt = same, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
@@ -625,9 +626,10 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         if (    UDSign * intercept.y  >= UDSign * nextWallForward.y 
              || UDSign * intercept.y  <= UDSign * nextWallBackward.y
              || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
+             || UDSign * ecbp[nextPt].y <= UDSign * intercept.y
              || isOutside(ecbp[nextPt], nextWallTop, nextWallBottom, wallType)
            ) {
-          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y || UDSign * ecbp[nextPt].y <= UDSign * intercept.y) {
             // stopped short, directly push out backwards ECB point
             intercept2 = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
             pushout = pushoutClamp( intercept2.x - ecbp[pt].x, wallType);
@@ -642,7 +644,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           }
           else {
             // can slide the backwards ECB point all the way to wallForward
-            // warning: we are ignoring the possibility that the ECB can enter in contact at en edge on the corner nextWallForward
+            // warning: we are ignoring the possibility that the ECB can enter in contact at an edge on the corner nextWallForward
             // this will be caught by the edge sweeping routine, and not the point sweeping routine
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept2.x;
@@ -657,8 +659,8 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         }
         else {
           // do the physics to find the pushout, with ECB forward point being in contact with next wall
-          intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[fPt], ecbp[fPt]]);
-          pushout = intercept2.x - intercept.x;
+          intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[fPt], ecbp[fPt]]);
+          pushout = intercept.x - intercept2.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
           console.log("'getHorizPushout': cur = bwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
@@ -737,9 +739,10 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         if (    UDSign * intercept.y  >= UDSign * nextWallForward.y 
              || UDSign * intercept.y  <= UDSign * nextWallBackward.y
              || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
+             || UDSign * ecbp[nextPt].y <= UDSign * intercept.y
              || isOutside(ecbp[nextPt], nextWallTop, nextWallBottom, wallType)
            ) {
-          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
+          if (UDSign * ecbp[pt].y <= UDSign * wallForward.y || UDSign * ecbp[nextPt].y <= UDSign * intercept.y) {
             // stopped short: can push out side ECB point directly, so do that
             intercept2 = coordinateIntercept( wall, hLineThrough(ecbp[same]));
             pushout = pushoutClamp(intercept2.x - ecbp[same].x, wallType);
@@ -770,7 +773,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         else {
           // do the physics to find the pushout, with ECB forward point being put in contact with next wall
           intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[fPt], ecbp[fPt]]);
-          pushout = intercept2.x - intercept.x;
+          pushout = intercept.x - intercept2.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
           console.log("'getHorizPushout': cur = same, ecb = fwd, nxt = fwd, doing physics and deferring.");
           return getHorizPushout( ecb1, ecbp, same
