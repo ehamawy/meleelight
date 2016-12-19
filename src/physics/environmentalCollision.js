@@ -207,7 +207,7 @@ function lineSweepParameters( line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D], fl
 
 function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : number
                           , position : Vec2D, counterclockwise : boolean
-                          , corner : Vec2D, wallType : string) : null | [null | string, Vec2D, number, number | null] {
+                          , corner : Vec2D, wallType : string) : null | [string, Vec2D, number, number | null] {
 
   // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
   let interiorECBside = "l";   
@@ -256,7 +256,7 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
       }
       const angularParameter = same2 + (xIntersect - ecbp[same].x) / (ecbp[other].x - ecbp[same].x) * (other2 - same2);
       console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
-      return ( [null, newPosition, s, angularParameter] ); // s is the sweeping parameter, t just moves along the edge
+      return ( ["x"+wallType, newPosition, s, angularParameter] ); // s is the sweeping parameter, t just moves along the edge
     }
     else {
       console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross "+wallType+" corner.");
@@ -859,7 +859,6 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
 };
 
 
-
 function relevantECBPointFromWall(ecb : ECB, wallBottom : Vec2D, wallTop : Vec2D, wallType : string) : number {
   let sign = 1;
   let same = 3;
@@ -925,7 +924,7 @@ type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], nu
 // which is contained in an infinite line, extending both ways, which also has an inside and an outside
 function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                        , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
-                       , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [null | string, Vec2D, number, number | null] {
+                       , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [string, Vec2D, number, number | null] {
 
 // STANDING ASSUMPTIONS
 // the ECB can only collide a ground/platform surface on its bottom point (or a bottom edge on a corner of the ground/platform)
@@ -1139,7 +1138,7 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition :
       }
       else {
         const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
-                                            , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
+                                          , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
         closestPointCollision = [wallType, newPointPosition, s, same];
       }
     }
@@ -1184,7 +1183,7 @@ function findCollision (ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition :
 
 type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 
-// this function finds the first (non-impotent) collision as the ECB1 moves to the ECBp
+// this function finds the first (non-ignored) collision as the ECB1 moves to the ECBp
 // return type: either null (no collision), or a new center, with a label according to which surface was collided (null if a corner)
 function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                              , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
@@ -1199,8 +1198,8 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
                                             , wallAndThenWallTypeAndIndex[1] ]);
 
   for (let i = 0; i < collisionData.length; i++) {
-    if (collisionData[i][0] !== null) { 
-      suggestedMaybeCenterAndTouchingData.push( [collisionData[i][0][1], collisionData[i][1], collisionData[i][0][2] ]);
+    if (collisionData[i][0] !== null) {
+      suggestedMaybeCenterAndTouchingData.push( [collisionData[i][0][1], [collisionData[i][0][0], collisionData[i][1][1]], collisionData[i][0][2] ]);
     }
   }
 
@@ -1223,7 +1222,6 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
   console.log("'collisionRoutine': pass number "+passNumber+".");
   let touchingData = oldTouchingData;
   let ecbSquashFactor = oldecbSquashFactor;
-
 
   if (passNumber > maximumCollisionDetectionPasses) {
     if (touchingData !== null) {

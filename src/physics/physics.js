@@ -673,9 +673,9 @@ export function physics (i : number, input : any) : void {
       const ecbpBottom = new Vec2D ( player[i].phys.ECBp[0].x + newPosition.x - player[i].phys.pos.x
                                    , player[i].phys.ECBp[0].y + newPosition.y - player[i].phys.pos.y);
       const surfaceLabel = collisionData[1][0];
-      const surfaceIndex = collisionData[1][1];        
+      const surfaceIndex = collisionData[1][1];
 
-      switch(surfaceLabel) {
+      switch(surfaceLabel[0]) {
         case "l": // player touching left wall
           notTouchingWalls[0] = false;
           dealWithWallCollision(i, newPosition, "l", surfaceIndex, input);
@@ -693,6 +693,8 @@ export function physics (i : number, input : any) : void {
         case "p": // player landed on platform
           dealWithPlatformCollision(i, alreadyGrounded, newPosition, ecbpBottom, surfaceIndex, input);
           break;
+        case "x": // corner collision
+          dealWithCollision(i, newPosition);
         default:
           console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform");
           break;
