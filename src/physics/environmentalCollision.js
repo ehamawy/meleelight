@@ -276,6 +276,8 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
                         , situation
                         , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number] {
   console.log("'getHorizPushout': working with "+wallType+""+wallIndex+".");
+  console.log("'getHorizPushout': pushout total was "+oldTotalPushout+".");
+  console.log("'getHorizPushout': previous pushout was "+previousPushout+".");
 
   const wallRight  = extremePoint(wall, "r");
   const wallLeft   = extremePoint(wall, "l");
@@ -569,7 +571,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         if (    UDSign * intercept.y    >= UDSign * nextWallForward.y 
              || UDSign * intercept.y    <= UDSign * nextWallBackward.y
              || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
-             || isOutside(ecbp[nextPt], nextWallBottom, nextWallTop, wallType)
+             || isOutside(ecbp[nextPt], nextWallTop, nextWallBottom, wallType)
            ) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short, directly push out backwards ECB point
@@ -623,7 +625,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         if (    UDSign * intercept.y  >= UDSign * nextWallForward.y 
              || UDSign * intercept.y  <= UDSign * nextWallBackward.y
              || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
-             || isOutside(ecbp[nextPt], nextWallBottom, nextWallTop, wallType)
+             || isOutside(ecbp[nextPt], nextWallTop, nextWallBottom, wallType)
            ) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short, directly push out backwards ECB point
@@ -735,7 +737,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         if (    UDSign * intercept.y  >= UDSign * nextWallForward.y 
              || UDSign * intercept.y  <= UDSign * nextWallBackward.y
              || UDSign * ecbp[nextPt].y <= UDSign * nextWallBackward.y
-             || isOutside(ecbp[nextPt], nextWallBottom, nextWallTop, wallType)
+             || isOutside(ecbp[nextPt], nextWallTop, nextWallBottom, wallType)
            ) {
           if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
             // stopped short: can push out side ECB point directly, so do that
