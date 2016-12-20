@@ -20,7 +20,8 @@ import {extremePoint} from "../stages/util/extremePoint";
 import {connectednessFromChains} from "../stages/util/connectednessFromChains";
 import {moveECB, squashDownECB} from "../main/util/ecbTransform";
 
-type ConnectednessFunction = (label : [string, number], side : string) => null | [string, number];
+// eslint-disable-next-line no-duplicate-imports
+import type {ConnectednessFunction} from "../stages/util/connectednessFromChains";
 
 
 function dealWithCollision(i : number, newCenter : Vec2D) : void {
