@@ -1347,7 +1347,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 // finds the ECB squash factor for a grounded ECB
 export function groundedECBSquashFactor( ecb : ECB, ceilings : Array<[Vec2D, Vec2D]>) : null | number {
   const ceilingYValues = ceilings.map ( (ceil) => {
-    if (ecb[0].x < ceil[0].x || ecb[0].x > ceil[1].x) {
+    if (ecb[2].x < extremePoint(ceil, "l").x || ecb[2].x > extremePoint(ceil, "r").x ) {
       return null;
     } 
     else {
@@ -1355,7 +1355,6 @@ export function groundedECBSquashFactor( ecb : ECB, ceilings : Array<[Vec2D, Vec
     }
   } );
   const lowestCeilingYValue = findSmallestWithin(ceilingYValues, ecb[0].y, ecb[2].y);
-  console.log(lowestCeilingYValue);
   if (lowestCeilingYValue === null) {
     return null;
   }
@@ -1371,36 +1370,36 @@ function inflateECB ( ecb : ECB, t : null | number
                     , relevantSurfaces : Array<LabelledSurface>
                     , stage : Stage
                     , connectednessFunction : ConnectednessFunction) : null | [Vec2D, number] {
-  let position = null;
+  let focus = null;
   if (t === null) {
-    position = new Vec2D( ecb[0].x, (ecb[0].y + ecb[2].y)/1 );
+    focus = new Vec2D( ecb[0].x, (ecb[0].y + ecb[2].y)/2 );
   }
   else if (t <= 1) {
-    position = new Vec2D ( (1 - t    )*ecb[0].x + t    *ecb[1].x, (1 - t    )*ecb[0].y + t    *ecb[1].y );
+    focus = new Vec2D ( (1 - t    )*ecb[0].x + t    *ecb[1].x, (1 - t    )*ecb[0].y + t    *ecb[1].y );
   }
   else if (t <= 2) {
-    position = new Vec2D ( (1 - (t-1))*ecb[1].x + (t-1)*ecb[2].x, (1 - (t-1))*ecb[1].y + (t-1)*ecb[2].y );
+    focus = new Vec2D ( (1 - (t-1))*ecb[1].x + (t-1)*ecb[2].x, (1 - (t-1))*ecb[1].y + (t-1)*ecb[2].y );
   }
   else if (t <= 3) {
-    position = new Vec2D ( (1 - (t-2))*ecb[2].x + (t-2)*ecb[3].x, (1 - (t-2))*ecb[2].y + (t-2)*ecb[3].y );
+    focus = new Vec2D ( (1 - (t-2))*ecb[2].x + (t-2)*ecb[3].x, (1 - (t-2))*ecb[2].y + (t-2)*ecb[3].y );
   }
   else {
-    position = new Vec2D ( (1 - (t-3))*ecb[3].x + (t-3)*ecb[0].x, (1 - (t-3))*ecb[3].y + (t-3)*ecb[0].y );
+    focus = new Vec2D ( (1 - (t-3))*ecb[3].x + (t-3)*ecb[0].x, (1 - (t-3))*ecb[3].y + (t-3)*ecb[0].y );
   }
   const offset = additionalOffset/10;
-  const pointlikeECB : ECB = [ new Vec2D ( position.x         , position.y - offset ) 
-                             , new Vec2D ( position.x + offset, position.y          )
-                             , new Vec2D ( position.x         , position.y + offset )
-                             , new Vec2D ( position.x - offset, position.y          )
+  const pointlikeECB : ECB = [ new Vec2D ( focus.x         , focus.y - offset ) 
+                             , new Vec2D ( focus.x + offset, focus.y          )
+                             , new Vec2D ( focus.x         , focus.y + offset )
+                             , new Vec2D ( focus.x - offset, focus.y          )
                              ];
-  const closestCollision = findClosestCollision( ecb, pointlikeECB, position, position
+  const closestCollision = findClosestCollision( ecb, pointlikeECB, focus, focus
                                                , relevantSurfaces
                                                , stage, connectednessFunction );
   if (closestCollision === null) {
     return null;
   }
   else {
-    return [position, closestCollision[2]]; // collision location, sweeping parameter
+    return [focus, closestCollision[2]]; // ECB contact location, sweeping parameter
   }
 }
 

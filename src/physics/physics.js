@@ -633,7 +633,7 @@ export function physics (i : number, input : any) : void {
 
       [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connectednessFunction, input);
 
-      const groundSquashFactor = groundedECBSquashFactor(player[i].phys.ECBp, activeStage.ceiling);
+      const groundSquashFactor = groundedECBSquashFactor(player[i].phys.ECBp, toList(activeStage.ceiling));
       if (groundSquashFactor !== null) {
         groundedECBSquashData = [player[i].phys.pos, groundSquashFactor];
       }
