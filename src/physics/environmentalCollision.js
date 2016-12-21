@@ -29,6 +29,7 @@ export const additionalOffset : number = 0.00001;
 
 
 let surfaceIgnoreList : ignoreList = [];
+const pushoutSigns = [null, null];
 
 
 // -----------------------------------------------------
@@ -1319,10 +1320,33 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
     }
 
     else {
-      // otherwise, loop
+      // otherwise, check for conflicting pushout
       const [newPosition, surfaceTypeAndIndex, angularParameter] = closestCollision;
       const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
       const newecbp = moveECB (ecbp, vec);
+
+      if (    (pushoutSigns[0] === "+" && vec.x < 0)
+           || (pushoutSigns[0] === "-" && vec.x > 0)
+           || (pushoutSigns[1] === "+" && vec.y < 0)
+           || (pushoutSigns[1] === "-" && vec.y > 0)
+          ) { // conflicting pushouts, do ECB squashing
+        if (touchingData !== null) {
+          ecbSquashData = inflateECB (ecbp, touchingData[2], relevantSurfaces, stage, connectednessFunction);
+          return [position, [touchingData[0], touchingData[1]], ecbSquashData];
+        }
+        else {
+          return [position, null, ecbSquashData];
+        }
+      }
+      // no conflicts, update pushout signs if necessary
+      else if (pushoutSigns[0] === null && vec.x !== 0) {
+        pushoutSigns[0] = vec.x > 0 ? "+" : "-";
+      }
+      else if (pushoutSigns[1] === null && vec.y !== 0) {
+        pushoutSigns[1] = vec.y > 0 ? "+" : "-";
+      }
+
+      // no conflicting pushouts, loop
 
       // update collision label data
       if (touchingData === null) {
@@ -1355,11 +1379,12 @@ export function groundedECBSquashFactor( ecb : ECB, ceilings : Array<[Vec2D, Vec
     }
   } );
   const lowestCeilingYValue = findSmallestWithin(ceilingYValues, ecb[0].y, ecb[2].y);
+  const offset = additionalOffset/10;
   if (lowestCeilingYValue === null) {
     return null;
   }
   else {
-    return ( (lowestCeilingYValue - ecb[0].y) / (ecb[2].y - ecb[0].y) );
+    return ( Math.max(offset, (lowestCeilingYValue - ecb[0].y) / (ecb[2].y - ecb[0].y) - offset));
   }
 };
 
@@ -1399,7 +1424,7 @@ function inflateECB ( ecb : ECB, t : null | number
     return null;
   }
   else {
-    return [focus, closestCollision[2]]; // ECB contact location, sweeping parameter
+    return [focus, Math.max(offset, closestCollision[2] - offset)]; // ECB contact location, sweeping parameter
   }
 }
 
@@ -1462,6 +1487,8 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
                                        , null | [Vec2D, number] // ECB scaling data
                                        ] {
   surfaceIgnoreList = [];
+  pushoutSigns[0] = null;
+  pushoutSigns[1] = null;
   return collisionRoutine( ecbp, ecb1, position, prevPosition
                          , relevantSurfaces
                          , stage, connectednessFunction

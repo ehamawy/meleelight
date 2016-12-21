@@ -593,9 +593,11 @@ export function physics (i : number, input : any) : void {
     new Vec2D(x - ecbOffset[1], y + ecbOffset[2] )
   ];
 
+  /*
   if (ecbSquashData[i] !== null) {
     player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, ecbSquashData[i]);
   }
+  */
 
 
 
