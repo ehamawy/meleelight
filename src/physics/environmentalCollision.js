@@ -10,6 +10,7 @@ import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {connectednessFromChains} from "../stages/util/connectednessFromChains";
 import {moveECB} from "../main/util/ecbTransform";
+import {zipLabels} from "../main/util/zipLabels";
 import {getSurfaceFromStage} from "../stages/stage";
 import {addToIgnoreList, isIgnored, cornerIsIgnored} from "./surfaceIgnoreList";
 
@@ -972,6 +973,7 @@ type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], nu
 // which is contained in an infinite line, extending both ways, which also has an inside and an outside
 function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                        , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
+                       , ignoringPushouts : string
                        , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [string, Vec2D, number, number | null] {
 
 // STANDING ASSUMPTIONS
@@ -985,6 +987,18 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
 //    - top to bottom for right walls
 //    - right to left for ceilings
 //    - bottom to top for left walls
+
+  // first check whether we are in an ignored situation
+  if (ignoringPushouts === "all") {
+    return null;
+  }
+  else if (ignoringPushouts === "horiz" && (wallType === "l" || wallType === "r")) {
+    return null;
+  }
+  // cannot immediately return null for horizontal surfaces when vertical pushouts are ignored, because of ECB edge colliding on corners of surfaces
+  // this will be tackled later
+
+  // start defining useful constants/variables
 
   const wallTop    = extremePoint(wall, "t");
   const wallBottom = extremePoint(wall, "b");
@@ -1078,58 +1092,64 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
     let closestEdgeCollision = null;
     let corner : null | Vec2D = null;
 
-    // case 1
-    if ( getXOrYCoord(ecb1[same], xOrY) > getXOrYCoord(wallTopOrRight, xOrY) ) {
-      counterclockwise = !flip;
-      other = turn(same, counterclockwise);
-      if ( getXOrYCoord(ecbp[other], xOrY) < getXOrYCoord(wallTopOrRight, xOrY) ) { 
-        corner = wallTopOrRight;
-      }
-    }
-
-    // case 2
-    else if ( getXOrYCoord(ecb1[same], xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY) ) {
-      counterclockwise = flip;
-      other = turn(same, counterclockwise);
-      if ( getXOrYCoord(ecbp[other], xOrY) > getXOrYCoord(wallBottomOrLeft, xOrY) ) { 
-        corner = wallBottomOrLeft;
-      }
-    }
-
     let edgeSweepResult = null;
     let otherEdgeSweepResult = null;
 
-    if (corner !== null && !cornerIsIgnored(corner, surfaceIgnoreList, stage)) {
-      // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
-      let interiorECBside = "l";
-      if (counterclockwise === false) {
-        interiorECBside = "r";    
+    // ignore all ECB edge collision checking if horizontal pushout is ignored
+    // we already tackled this if ignoringPushouts === "all"
+    if (ignoringPushouts !== "horiz") {
+
+      // case 1
+      if ( getXOrYCoord(ecb1[same], xOrY) > getXOrYCoord(wallTopOrRight, xOrY) ) {
+        counterclockwise = !flip;
+        other = turn(same, counterclockwise);
+        if ( getXOrYCoord(ecbp[other], xOrY) < getXOrYCoord(wallTopOrRight, xOrY) ) { 
+          corner = wallTopOrRight;
+        }
       }
 
-      if (!isOutside (corner, ecbp[same], ecbp[other], interiorECBside) && isOutside (corner, ecb1[same], ecb1[other], interiorECBside) ) {
-        edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, position, counterclockwise, corner, wallType);
-      }
-    }
-
-    if (checkTopInstead) {
-      // unless we are dealing with a wall where the ECB can collided on the topmost point, in whih case 'same' and 'top' are relevant
-      let otherCounterclockwise = false; // whether ( same ECB point -> top ECB point) is counterclockwise
-      let otherCorner = wallRight;
-      if (wallType === "l") {
-        otherCounterclockwise = true;
-        otherCorner = wallLeft;
+      // case 2
+      else if ( getXOrYCoord(ecb1[same], xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY) ) {
+        counterclockwise = flip;
+        other = turn(same, counterclockwise);
+        if ( getXOrYCoord(ecbp[other], xOrY) > getXOrYCoord(wallBottomOrLeft, xOrY) ) { 
+          corner = wallBottomOrLeft;
+        }
       }
 
-      let otherInteriorECBside = "l";
-      if (otherCounterclockwise === false) {
-        otherInteriorECBside = "r";
+      if (corner !== null && !cornerIsIgnored(corner, surfaceIgnoreList, stage)) {
+        // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
+        let interiorECBside = "l";
+        if (counterclockwise === false) {
+          interiorECBside = "r";    
+        }
+
+        if (!isOutside (corner, ecbp[same], ecbp[other], interiorECBside) && isOutside (corner, ecb1[same], ecb1[other], interiorECBside) ) {
+          edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, position, counterclockwise, corner, wallType);
+        }
       }
 
-      if (    !isOutside(otherCorner, ecbp[same], ecbp[2], otherInteriorECBside) 
-           &&  isOutside(otherCorner, ecb1[same], ecb1[2], otherInteriorECBside)
-           && !cornerIsIgnored(otherCorner, surfaceIgnoreList, stage) ) {
-        otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise, otherCorner, wallType);
+      if (checkTopInstead) {
+        // unless we are dealing with a wall where the ECB can collided on the topmost point, in whih case 'same' and 'top' are relevant
+        let otherCounterclockwise = false; // whether ( same ECB point -> top ECB point) is counterclockwise
+        let otherCorner = wallRight;
+        if (wallType === "l") {
+          otherCounterclockwise = true;
+          otherCorner = wallLeft;
+        }
+
+        let otherInteriorECBside = "l";
+        if (otherCounterclockwise === false) {
+          otherInteriorECBside = "r";
+        }
+
+        if (    !isOutside(otherCorner, ecbp[same], ecbp[2], otherInteriorECBside) 
+             &&  isOutside(otherCorner, ecb1[same], ecb1[2], otherInteriorECBside)
+             && !cornerIsIgnored(otherCorner, surfaceIgnoreList, stage) ) {
+          otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise, otherCorner, wallType);
+        }
       }
+
     }
 
     // if only one of the two ECB edges (same-other / same-top) collided, take that one
@@ -1167,49 +1187,57 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
     // ECB vertex collision checking
 
     let closestPointCollision : null | [string, Vec2D, number, number | null] = null;
-    // s = sweeping parameter
-    const s = pointSweepingCheck ( wall, wallType, wallIndex
-                                 , wallBottomOrLeft, wallTopOrRight
-                                 , stage, connectednessFunction
-                                 , xOrY, same
-                                 , ecb1, ecbp);
 
-    let additionalPushout = additionalOffset;
-    if (wallType === "l" || wallType === "c") {
-      additionalPushout = - additionalOffset;
-    }
+    // ignore point collision if told to
+    // we already tackled this if ignoringPushouts is "all" or "vert",
+    // so we just need to not run the vertex collision routine in the case that we are ignoring horizontal pushout, and the surface is horizontal
+    if (ignoringPushouts !== "horiz" || wallType === "l" || wallType === "r" ) {
 
-    if (s !== null && (closestEdgeCollision === null || closestEdgeCollision[2] > s)) { // collision did occur, and with smaller sweeping parameter than the edge collision
-      if ( wallType === "l" || wallType === "r") {
-        if(! isIgnored( [wallType, wallIndex], surfaceIgnoreList)) { // wall is not ignored 
-          let situation = "u";
-          if (position.y < prevPosition.y) {
-            situation = "d";
-          }
-          // the following function updates the surface ignore list
-          const [ pushout
-                , maybeAngularParameter ] = getHorizPushout( ecb1, ecbp, same
-                                                           , wall, wallType, wallIndex
-                                                           , 0, 0
-                                                           , situation
-                                                           , stage, connectednessFunction );
-          // debug: remove below
-          //surfaceIgnoreList = [];
-          // debug: remove above
-          console.log("'findCollision': horizontal pushout value is "+pushout+".");
-          // don't count a collision if no pushout occurred
-          if (pushout !== 0) {
-            const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
-            closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
-          }
-        }
-      } 
-      else {
-        // need to add an additional pushout, not included in horizontal pushout function
-        const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
-                                          , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
-        closestPointCollision = [wallType, newPointPosition, s, same];
+      // s = sweeping parameter
+      const s = pointSweepingCheck ( wall, wallType, wallIndex
+                                   , wallBottomOrLeft, wallTopOrRight
+                                   , stage, connectednessFunction
+                                   , xOrY, same
+                                   , ecb1, ecbp);
+      
+      let additionalPushout = additionalOffset;
+      if (wallType === "l" || wallType === "c") {
+        additionalPushout = - additionalOffset;
       }
+      
+      if (s !== null && (closestEdgeCollision === null || closestEdgeCollision[2] > s)) { // collision did occur, and with smaller sweeping parameter than the edge collision
+        if ( wallType === "l" || wallType === "r") {
+          if(! isIgnored( [wallType, wallIndex], surfaceIgnoreList)) { // wall is not ignored 
+            let situation = "u";
+            if (position.y < prevPosition.y) {
+              situation = "d";
+            }
+            // the following function updates the surface ignore list
+            const [ pushout
+                  , maybeAngularParameter ] = getHorizPushout( ecb1, ecbp, same
+                                                             , wall, wallType, wallIndex
+                                                             , 0, 0
+                                                             , situation
+                                                             , stage, connectednessFunction );
+            // debug: remove below
+            //surfaceIgnoreList = [];
+            // debug: remove above
+            console.log("'findCollision': horizontal pushout value is "+pushout+".");
+            // don't count a collision if no pushout occurred
+            if (pushout !== 0) {
+              const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
+              closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
+            }
+          }
+        } 
+        else {
+          // need to add an additional pushout, not included in horizontal pushout function
+          const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
+                                            , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
+          closestPointCollision = [wallType, newPointPosition, s, same];
+        }
+      }
+
     }
 
     // end of ECB vertex collision checking
@@ -1256,6 +1284,7 @@ type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 // return type: either null (no collision), or a new center, with a label according to which surface was collided (null if a corner)
 function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                              , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
+                             , ignoringPushouts : string
                              , stage : Stage, connectednessFunction : ConnectednessFunction ) : MaybeCenterAndTouchingDataType {
   const suggestedMaybeCenterAndTouchingData : Array<MaybeCenterAndTouchingDataType> = [null]; // initialise list of new collisions
   const collisionData = wallAndThenWallTypeAndIndexs.map( 
@@ -1263,6 +1292,7 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
           (wallAndThenWallTypeAndIndex)  => [ findCollision ( ecbp, ecb1, position, prevPosition
                                                             , wallAndThenWallTypeAndIndex[0]
                                                             , wallAndThenWallTypeAndIndex[1][0], wallAndThenWallTypeAndIndex[1][1]
+                                                            , ignoringPushouts
                                                             , stage, connectednessFunction )
                                             , wallAndThenWallTypeAndIndex[1] ]);
 
@@ -1278,7 +1308,9 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
 // this function loops over all walls/surfaces it is provided, calculating the collision offsets that each ask for,
 // and at each iteration returning the smallest possible offset (i.e. collision with smallest sweeping parameter)
 function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
-                          , relevantSurfaces : Array<LabelledSurface>
+                          , relevantHorizSurfaces : Array<LabelledSurface>
+                          , relevantVertSurfaces : Array<LabelledSurface>
+                          , ignoringPushouts : string
                           , stage : Stage
                           , connectednessFunction : ConnectednessFunction
                           , oldTouchingData : null | [string, number, number | null] // surface type, surface index, angular parameter
@@ -1288,13 +1320,29 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                               , null | [string, number] // collision surface type and index
                               , null | [Vec2D, number] // ECB scaling data
                               ] {
+
   let touchingData = oldTouchingData;
   let ecbSquashData = oldecbSquashData;
+  const allRelevantSurfaces = relevantVertSurfaces.concat(relevantHorizSurfaces);
+  let currentRelevantSurfaces = [];
+  switch (ignoringPushouts) {
+    case "no":
+    default:
+      currentRelevantSurfaces = allRelevantSurfaces;
+      break;
+    case "horiz": // ignoring horizontal pushout, so not ignoring horizontal surfaces
+      currentRelevantSurfaces = relevantHorizSurfaces;
+      break;
+    case "vert": // ignoring vertical pushout, so not ignoring vertical surfaces
+      currentRelevantSurfaces = relevantVertSurfaces;
+      break;
+  }
+  let newIgnoringPushouts = ignoringPushouts;
 
   if (passNumber > maximumCollisionDetectionPasses) {
     console.log("'collisionRoutine': reached maximum pass number, aborting.");
     if (touchingData !== null) {
-      ecbSquashData = inflateECB (ecbp, touchingData[2], relevantSurfaces, stage, connectednessFunction);    
+      ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);    
       return [position, [touchingData[0], touchingData[1]], ecbSquashData];
     }
     else {
@@ -1306,12 +1354,13 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
     console.log("'collisionRoutine': pass number "+passNumber+".");
     // first, find the closest collision
     const closestCollision = findClosestCollision( ecbp, ecb1, position, prevPosition
-                                                 , relevantSurfaces
+                                                 , currentRelevantSurfaces
+                                                 , newIgnoringPushouts
                                                  , stage, connectednessFunction);
     if (closestCollision === null) {
       // if no collision occured, end
       if (touchingData !== null) {
-        ecbSquashData = inflateECB (ecbp, touchingData[2], relevantSurfaces, stage, connectednessFunction);
+        ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
         return [position, [touchingData[0], touchingData[1]], ecbSquashData];
       }
       else {
@@ -1319,26 +1368,75 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       }
     }
 
+
+
+    // TODO: when there is a conflict in pushout, do a squash and then eliminate that kind of walls from the loop, instead of stoppin the loop altogether
+    // also need to add a variable for ignoring corner collisions in the case of eliminating walls
+
     else {
-      // otherwise, check for conflicting pushout
+      
       const [newPosition, surfaceTypeAndIndex, angularParameter] = closestCollision;
       const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
-      const newecbp = moveECB (ecbp, vec);
+      let newecbp = moveECB (ecbp, vec);
 
+
+      // first, check for pushout conflicts
       if (    (pushoutSigns[0] === "+" && vec.x < 0)
            || (pushoutSigns[0] === "-" && vec.x > 0)
-           || (pushoutSigns[1] === "+" && vec.y < 0)
-           || (pushoutSigns[1] === "-" && vec.y > 0)
-          ) { // conflicting pushouts, do ECB squashing
-        if (touchingData !== null) {
-          ecbSquashData = inflateECB (ecbp, touchingData[2], relevantSurfaces, stage, connectednessFunction);
-          return [position, [touchingData[0], touchingData[1]], ecbSquashData];
+         ) { // horizontal pushout conflict
+
+        if (touchingData === null) {
+          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
+          if (ecbSquashData !== null) {
+            newecbp = squashECBAt(newecbp, ecbSquashData);
+          }
+        }
+
+        if (ignoringPushouts === "vert" || ignoringPushouts === "all") {
+          newIgnoringPushouts = "all";
         }
         else {
-          return [position, null, ecbSquashData];
+          newIgnoringPushouts = "horiz";
         }
+
+        // loop but without walls and corners
+        return collisionRoutine( newecbp, ecb1, newPosition, position
+                               , relevantHorizSurfaces
+                               , relevantVertSurfaces
+                               , newIgnoringPushouts
+                               , stage, connectednessFunction
+                               , touchingData, ecbSquashData, passNumber+1);
       }
-      // no conflicts, update pushout signs if necessary
+
+      else if (    (pushoutSigns[1] === "+" && vec.y < 0)
+                || (pushoutSigns[1] === "-" && vec.y > 0)
+              ) { // vertical pushout conflict
+
+        if (touchingData === null) {
+          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
+          if (ecbSquashData !== null) {
+            newecbp = squashECBAt(newecbp, ecbSquashData);
+          }
+        }
+
+        if (ignoringPushouts === "horiz" || ignoringPushouts === "all") {
+          newIgnoringPushouts = "all";
+        }
+        else {
+          newIgnoringPushouts = "vert";
+        }
+
+        // loop but without walls and corners
+        return collisionRoutine( newecbp, ecb1, newPosition, position
+                               , relevantHorizSurfaces
+                               , relevantVertSurfaces
+                               , newIgnoringPushouts
+                               , stage, connectednessFunction
+                               , touchingData, ecbSquashData, passNumber+1);
+      }
+
+
+      // no pushout conflicts, update pushout signs if necessary
       else if (pushoutSigns[0] === null && vec.x !== 0) {
         pushoutSigns[0] = vec.x > 0 ? "+" : "-";
       }
@@ -1361,7 +1459,9 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       }
 
       return collisionRoutine( newecbp, ecb1, newPosition, position // might want to keep this 4th argument as prevPosition and not update it to position?
-                             , relevantSurfaces
+                             , relevantHorizSurfaces
+                             , relevantVertSurfaces
+                             , newIgnoringPushouts
                              , stage, connectednessFunction
                              , touchingData, ecbSquashData, passNumber+1);
     }
@@ -1419,6 +1519,7 @@ function inflateECB ( ecb : ECB, t : null | number
                              ];
   const closestCollision = findClosestCollision( ecb, pointlikeECB, focus, focus
                                                , relevantSurfaces
+                                               , "no" // don't ignore any surfaces for this calculation
                                                , stage, connectednessFunction );
   if (closestCollision === null) {
     return null;
@@ -1477,9 +1578,9 @@ function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeC
 };
 
 
-// this function initialises necessary variables and then calls the main collision routine loop
+// this function initialises necessary data and then calls the main collision routine loop
 export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
-                                   , relevantSurfaces : Array<LabelledSurface>
+                                   , horizIgnore : string
                                    , stage : Stage
                                    , connectednessFunction : ConnectednessFunction
                                    ) : [ Vec2D // new position
@@ -1489,8 +1590,42 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
   surfaceIgnoreList = [];
   pushoutSigns[0] = null;
   pushoutSigns[1] = null;
+
+  // --------------------------------------------------------------
+  // BELOW: this is recomputed every frame and should be avoided
+  
+  const stageWalls = zipLabels(stage.wallL,"l").concat( zipLabels(stage.wallR,"r") );
+  const stageGrounds = zipLabels(stage.ground,"g");
+  const stageCeilings = zipLabels(stage.ceiling,"c");
+  const stagePlatforms = zipLabels(stage.platform, "p");
+
+  // ABOVE: this is recomputed every frame and should be avoided
+  // --------------------------------------------------------------
+
+  let relevantVertSurfaces = stageWalls;
+
+  let relevantHorizSurfaces = [];
+
+  switch (horizIgnore) {
+    case "all":
+      // do nothing, relevantHorizSurfaces stays empty
+      break;
+    case "platforms":
+      relevantHorizSurfaces = stageGrounds.concat(stageCeilings);
+      break;
+    case "none":
+    default:
+      relevantHorizSurfaces = stageGrounds.concat(stageCeilings).concat(stagePlatforms)
+      break;
+  }
+
   return collisionRoutine( ecbp, ecb1, position, prevPosition
-                         , relevantSurfaces
+                         , relevantHorizSurfaces
+                         , relevantVertSurfaces
+                         , "no" // start off not ignoring any pushouts
                          , stage, connectednessFunction
-                         , null, null, 1);
+                         , null // start off not touching anything
+                         , null // start off without ECB squashing
+                         , 1 // start off at pass number 1
+                         );
 };

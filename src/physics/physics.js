@@ -14,7 +14,6 @@ import {drawVfx} from "../main/vfx/drawVfx";
 import {activeStage} from "../stages/activeStage";
 import {Box2D} from "../main/util/Box2D";
 import {Vec2D} from "../main/util/Vec2D";
-import {zipLabels} from "../main/util/zipLabels";
 import {toList} from "../main/util/toList";
 import {extremePoint} from "../stages/util/extremePoint";
 import {connectednessFromChains} from "../stages/util/connectednessFromChains";
@@ -650,25 +649,15 @@ export function physics (i : number, input : any) : void {
 
     const notTouchingWalls = [true, true];
 
-    // --------------------------------------------------------------
-    // BELOW: this is recomputed every frame and should be avoided
-
-    const stageWalls = zipLabels(activeStage.wallL,"l").concat( zipLabels(activeStage.wallR,"r") );
-    const stageGrounds = zipLabels(activeStage.ground,"g");
-    const stageCeilings = zipLabels(activeStage.ceiling,"c");
-    const stagePlatforms = zipLabels(activeStage.platform, "p");
-
-    // ABOVE: this is recomputed every frame and should be avoided
-    // --------------------------------------------------------------
-
-    let relevantSurfaces = stageWalls;
-
     const notIgnoringPlatforms = ( !actionStates[characterSelections[i]][player[i].actionState].canPassThrough || (input[i][0].lsY > -0.56) );
-    if (!alreadyGrounded || !stillGrounded) {
-      relevantSurfaces = relevantSurfaces.concat(stageCeilings).concat(stageGrounds);
-      if ( notIgnoringPlatforms ) {
-        relevantSurfaces = relevantSurfaces.concat(stagePlatforms);
-      }
+
+    let horizIgnore = "none"; // ignore no horizontal surfaces by default
+
+    if (alreadyGrounded && stillGrounded) {
+      horizIgnore = "all"; // ignore all vertical surfaces when grounded
+    }
+    else {
+      horizIgnore = notIgnoringPlatforms? "none" : "platforms";
     }
 
     // type : [ Vec2D       , null | [string, number], null | number     ]
@@ -677,7 +666,7 @@ export function physics (i : number, input : any) : void {
                                               , player[i].phys.ECB1
                                               , player[i].phys.pos
                                               , player[i].phys.posPrev
-                                              , relevantSurfaces
+                                              , horizIgnore
                                               , activeStage
                                               , connectednessFunction
                                               );
