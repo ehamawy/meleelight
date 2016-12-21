@@ -8,7 +8,7 @@ import {gameSettings} from "../settings";
 import {actionStates, turboAirborneInterrupt, turboGroundedInterrupt, turnOffHitboxes} from "./actionStateShortcuts";
 import {getLaunchAngle, getHorizontalVelocity, getVerticalVelocity, getHorizontalDecay, getVerticalDecay} from "./hitDetection";
 import {lostStockQueue} from "../main/render";
-import {runCollisionRoutine, coordinateIntercept, additionalOffset} from "./environmentalCollision";
+import {runCollisionRoutine, coordinateIntercept, additionalOffset, groundedECBSquashFactor} from "./environmentalCollision";
 import {deepCopyObject} from "../main/util/deepCopyObject";
 import {drawVfx} from "../main/vfx/drawVfx";
 import {activeStage} from "../stages/activeStage";
@@ -18,7 +18,7 @@ import {zipLabels} from "../main/util/zipLabels";
 import {toList} from "../main/util/toList";
 import {extremePoint} from "../stages/util/extremePoint";
 import {connectednessFromChains} from "../stages/util/connectednessFromChains";
-import {moveECB, squashDownECB} from "../main/util/ecbTransform";
+import {moveECB, squashECBAt} from "../main/util/ecbTransform";
 
 // eslint-disable-next-line no-duplicate-imports
 import type {ConnectednessFunction} from "../stages/util/connectednessFromChains";
@@ -279,6 +279,12 @@ export function land (i : number, newCenter : Vec2D
   player[i].phys.kVel.y = 0;
   player[i].hit.hitstun = 0;
 }
+
+const ecbSquashData : [ null | [Vec2D, number]
+                      , null | [Vec2D, number]
+                      , null | [Vec2D, number]
+                      , null | [Vec2D, number] 
+                      ] = [null, null, null, null];
 
 export function physics (i : number, input : any) : void {
   player[i].phys.posPrev = new Vec2D(player[i].phys.pos.x,player[i].phys.pos.y);
@@ -587,21 +593,24 @@ export function physics (i : number, input : any) : void {
     new Vec2D(x - ecbOffset[1], y + ecbOffset[2] )
   ];
 
+  if (ecbSquashData[i] !== null) {
+    player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, ecbSquashData[i]);
+  }
+
+
 
   if (!actionStates[characterSelections[i]][player[i].actionState].ignoreCollision) {
 
     const alreadyGrounded = player[i].phys.grounded;
     let stillGrounded = true;
     let backward = false;
+    let groundedECBSquashData = null;
 
     const connectedSurfaces = activeStage.connected;
     function connectednessFunction(gd, side) {
       return null;
     }
-    if (connectedSurfaces === null || connectedSurfaces === undefined ) {
-      // do nothing
-    }
-    else {
+    if (connectedSurfaces !== null && connectedSurfaces !== undefined ) {
       // this should not be done every frame
       connectednessFunction = function (gd, side) { return connectednessFromChains(gd, side, connectedSurfaces) ;};
     }
@@ -623,6 +632,11 @@ export function physics (i : number, input : any) : void {
       const relevantGroundTypeAndIndex = [relevantGroundType, relevantGroundIndex];
 
       [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connectednessFunction, input);
+
+      const groundSquashFactor = groundedECBSquashFactor(player[i].phys.ECBp, activeStage.ceiling);
+      if (groundSquashFactor !== null) {
+        groundedECBSquashData = [player[i].phys.pos, groundSquashFactor];
+      }
 
     }
 
@@ -668,6 +682,7 @@ export function physics (i : number, input : any) : void {
 
     if (collisionData[1] === null) {
       // no collision, do nothing
+      ecbSquashData[i] = groundedECBSquashData;
     }
     else {
       const newPosition = collisionData[0];
@@ -701,7 +716,20 @@ export function physics (i : number, input : any) : void {
           break;
       }
 
-    // TODO: ECB squashing
+      if (    collisionData[2] !== null 
+           && (     groundedECBSquashData === null
+                || (groundedECBSquashData !== null && collisionData[2][1] < groundedECBSquashData[1] )
+              )
+         ) {
+        ecbSquashData[i] = collisionData[2];
+      }
+      else {
+        ecbSquashData[i] = groundedECBSquashData;
+      }
+
+      if (ecbSquashData[i] !== null) {
+        console.log("ecbSquashData[i][1]="+ecbSquashData[i][1]+".");
+      }
 
     }
 
@@ -924,6 +952,10 @@ export function physics (i : number, input : any) : void {
       new Vec2D( x               , y + ecbOffset[3] ),
       new Vec2D( x - ecbOffset[1], y + ecbOffset[2] )
     ];
+
+    if (ecbSquashData[i] !== null) {
+      player[i].phys.ECB1 = squashECBAt(player[i].phys.ECB1, ecbSquashData[i]);
+    }
   
     if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
       player[i].phys.ECB1[0].y = y;

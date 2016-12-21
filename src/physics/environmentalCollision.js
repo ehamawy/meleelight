@@ -1097,12 +1097,6 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
 
     let edgeSweepResult = null;
     let otherEdgeSweepResult = null;
-    
-    console.log("Ignored surfaces: "+surfaceIgnoreList.toString()+".");
-
-    if (corner !== null) {
-      console.log("Ignoring corner: "+cornerIsIgnored(corner, surfaceIgnoreList, stage)+".");
-    }
 
     if (corner !== null && !cornerIsIgnored(corner, surfaceIgnoreList, stage)) {
       // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
@@ -1130,9 +1124,8 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
         otherInteriorECBside = "r";
       }
 
-      console.log("Ignoring other corner: "+cornerIsIgnored(otherCorner, surfaceIgnoreList, stage)+".");
-      if (   !isOutside(otherCorner, ecbp[same], ecbp[2], otherInteriorECBside) 
-           && isOutside (otherCorner, ecb1[same], ecb1[2], otherInteriorECBside)
+      if (    !isOutside(otherCorner, ecbp[same], ecbp[2], otherInteriorECBside) 
+           &&  isOutside(otherCorner, ecb1[same], ecb1[2], otherInteriorECBside)
            && !cornerIsIgnored(otherCorner, surfaceIgnoreList, stage) ) {
         otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise, otherCorner, wallType);
       }
@@ -1288,23 +1281,23 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                           , stage : Stage
                           , connectednessFunction : ConnectednessFunction
                           , oldTouchingData : null | [string, number, number | null] // surface type, surface index, angular parameter
-                          , oldecbSquashFactor : null | number
+                          , oldecbSquashData : null | [Vec2D, number]
                           , passNumber : number
                           ) : [ Vec2D // new position
                               , null | [string, number] // collision surface type and index
-                              , null | number // ECB scaling factor
+                              , null | [Vec2D, number] // ECB scaling data
                               ] {
   let touchingData = oldTouchingData;
-  let ecbSquashFactor = oldecbSquashFactor;
+  let ecbSquashData = oldecbSquashData;
 
   if (passNumber > maximumCollisionDetectionPasses) {
     console.log("'collisionRoutine': reached maximum pass number, aborting.");
     if (touchingData !== null) {
-      ecbSquashFactor = inflateECB (ecbp, touchingData[2], relevantSurfaces);    
-      return [position, [touchingData[0], touchingData[1]], ecbSquashFactor];
+      ecbSquashData = inflateECB (ecbp, touchingData[2], relevantSurfaces, stage, connectednessFunction);    
+      return [position, [touchingData[0], touchingData[1]], ecbSquashData];
     }
     else {
-      return [position, null, ecbSquashFactor];
+      return [position, null, ecbSquashData];
     }
     
   }
@@ -1317,11 +1310,11 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
     if (closestCollision === null) {
       // if no collision occured, end
       if (touchingData !== null) {
-        ecbSquashFactor = inflateECB (ecbp, touchingData[2], relevantSurfaces);
-        return [position, [touchingData[0], touchingData[1]], ecbSquashFactor];
+        ecbSquashData = inflateECB (ecbp, touchingData[2], relevantSurfaces, stage, connectednessFunction);
+        return [position, [touchingData[0], touchingData[1]], ecbSquashData];
       }
       else {
-        return [position, null, ecbSquashFactor];
+        return [position, null, ecbSquashData];
       }
     }
 
@@ -1346,15 +1339,69 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       return collisionRoutine( newecbp, ecb1, newPosition, position // might want to keep this 4th argument as prevPosition and not update it to position?
                              , relevantSurfaces
                              , stage, connectednessFunction
-                             , touchingData, oldecbSquashFactor, passNumber+1);
+                             , touchingData, ecbSquashData, passNumber+1);
     }
   }
 };
 
-// finds the ECB squash factor by inflating the ECB from the point on the ECB given by the angular parameter
+// finds the ECB squash factor for a grounded ECB
+export function groundedECBSquashFactor( ecb : ECB, ceilings : Array<[Vec2D, Vec2D]>) : null | number {
+  const ceilingYValues = ceilings.map ( (ceil) => {
+    if (ecb[0].x < ceil[0].x || ecb[0].x > ceil[1].x) {
+      return null;
+    } 
+    else {
+      return coordinateIntercept( [ ecb[0], ecb[2] ] , ceil).y;
+    }
+  } );
+  const lowestCeilingYValue = findSmallestWithin(ceilingYValues, ecb[0].y, ecb[2].y);
+  console.log(lowestCeilingYValue);
+  if (lowestCeilingYValue === null) {
+    return null;
+  }
+  else {
+    return ( (lowestCeilingYValue - ecb[0].y) / (ecb[2].y - ecb[0].y) );
+  }
+};
+
+
+// finds the ECB squash factor by inflating the ECB from the point on the ECB given by the angular parameter t
 // if angular parameter is null, instead inflates the ECB from its center
-function inflateECB ( ecb : ECB, angularParameter : null | number, relevantSurfaces : Array<LabelledSurface>) : null | number {
-  return 1; // TODO
+function inflateECB ( ecb : ECB, t : null | number
+                    , relevantSurfaces : Array<LabelledSurface>
+                    , stage : Stage
+                    , connectednessFunction : ConnectednessFunction) : null | [Vec2D, number] {
+  let position = null;
+  if (t === null) {
+    position = new Vec2D( ecb[0].x, (ecb[0].y + ecb[2].y)/1 );
+  }
+  else if (t <= 1) {
+    position = new Vec2D ( (1 - t    )*ecb[0].x + t    *ecb[1].x, (1 - t    )*ecb[0].y + t    *ecb[1].y );
+  }
+  else if (t <= 2) {
+    position = new Vec2D ( (1 - (t-1))*ecb[1].x + (t-1)*ecb[2].x, (1 - (t-1))*ecb[1].y + (t-1)*ecb[2].y );
+  }
+  else if (t <= 3) {
+    position = new Vec2D ( (1 - (t-2))*ecb[2].x + (t-2)*ecb[3].x, (1 - (t-2))*ecb[2].y + (t-2)*ecb[3].y );
+  }
+  else {
+    position = new Vec2D ( (1 - (t-3))*ecb[3].x + (t-3)*ecb[0].x, (1 - (t-3))*ecb[3].y + (t-3)*ecb[0].y );
+  }
+  const offset = additionalOffset/10;
+  const pointlikeECB : ECB = [ new Vec2D ( position.x         , position.y - offset ) 
+                             , new Vec2D ( position.x + offset, position.y          )
+                             , new Vec2D ( position.x         , position.y + offset )
+                             , new Vec2D ( position.x - offset, position.y          )
+                             ];
+  const closestCollision = findClosestCollision( ecb, pointlikeECB, position, position
+                                               , relevantSurfaces
+                                               , stage, connectednessFunction );
+  if (closestCollision === null) {
+    return null;
+  }
+  else {
+    return [position, closestCollision[2]]; // collision location, sweeping parameter
+  }
 }
 
 
@@ -1413,7 +1460,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
                                    , connectednessFunction : ConnectednessFunction
                                    ) : [ Vec2D // new position
                                        , null | [string, number] // collision surface type and index
-                                       , null | number // ECB scaling factor
+                                       , null | [Vec2D, number] // ECB scaling data
                                        ] {
   surfaceIgnoreList = [];
   return collisionRoutine( ecbp, ecb1, position, prevPosition
