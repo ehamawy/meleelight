@@ -702,8 +702,9 @@ export function physics (i : number, input : any) : void {
           break;
         case "x": // corner collision
           dealWithCollision(i, newPosition);
+          break;
         default:
-          console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform");
+          console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform/corner");
           break;
       }
 

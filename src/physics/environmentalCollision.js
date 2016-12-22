@@ -1,5 +1,5 @@
 // @flow
-/* eslint-disable */
+/*eslint indent:1*/ // get stuffed
 
 import {Vec2D, getXOrYCoord, putXOrYCoord} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
@@ -9,7 +9,7 @@ import {solveQuadraticEquation} from "../main/util/solveQuadraticEquation";
 import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {connectednessFromChains} from "../stages/util/connectednessFromChains";
-import {moveECB} from "../main/util/ecbTransform";
+import {moveECB, squashECBAt} from "../main/util/ecbTransform";
 import {zipLabels} from "../main/util/zipLabels";
 import {getSurfaceFromStage} from "../stages/stage";
 import {addToIgnoreList, isIgnored, cornerIsIgnored} from "./surfaceIgnoreList";
@@ -30,7 +30,7 @@ export const additionalOffset : number = 0.00001;
 
 
 let surfaceIgnoreList : ignoreList = [];
-const pushoutSigns = [null, null];
+const pushoutSigns : [null | string, null | string] = [null, null];
 
 
 // -----------------------------------------------------
@@ -1358,6 +1358,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                                                  , newIgnoringPushouts
                                                  , stage, connectednessFunction);
     if (closestCollision === null) {
+      console.log("'collisionRoutine': no collision detected on this pass.");
       // if no collision occured, end
       if (touchingData !== null) {
         ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
@@ -1375,9 +1376,12 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 
     else {
       
-      const [newPosition, surfaceTypeAndIndex, angularParameter] = closestCollision;
+      let newPosition = closestCollision[0];
+      const surfaceTypeAndIndex = closestCollision[1];
+      const angularParameter = closestCollision[2];
       const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
-      let newecbp = moveECB (ecbp, vec);
+      const newecbp = moveECB (ecbp, vec);
+      let squashedecbp = newecbp;
 
 
       // first, check for pushout conflicts
@@ -1385,10 +1389,15 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
            || (pushoutSigns[0] === "-" && vec.x > 0)
          ) { // horizontal pushout conflict
 
-        if (touchingData === null) {
+        console.log("'collisionRoutine': horizontal pushout conflict.");
+
+        if (touchingData !== null) {
+          console.log("old angular parameter is "+touchingData[2]+".");
           ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
           if (ecbSquashData !== null) {
-            newecbp = squashECBAt(newecbp, ecbSquashData);
+            squashedecbp = squashECBAt(newecbp, ecbSquashData);
+            newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - newecbp[0].x
+                                   , newPosition.y + squashedecbp[0].y - newecbp[0].y);
           }
         }
 
@@ -1399,8 +1408,8 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
           newIgnoringPushouts = "horiz";
         }
 
-        // loop but without walls and corners
-        return collisionRoutine( newecbp, ecb1, newPosition, position
+        // loop, but ignoring everything that pushes out horizontally (walls and corners)
+        return collisionRoutine( squashedecbp, ecb1, newPosition, position
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
                                , newIgnoringPushouts
@@ -1412,10 +1421,14 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                 || (pushoutSigns[1] === "-" && vec.y > 0)
               ) { // vertical pushout conflict
 
-        if (touchingData === null) {
+        console.log("'collisionRoutine': vertical pushout conflict.");
+
+        if (touchingData !== null) {
           ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
           if (ecbSquashData !== null) {
-            newecbp = squashECBAt(newecbp, ecbSquashData);
+            squashedecbp = squashECBAt(newecbp, ecbSquashData);
+            newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - newecbp[0].x
+                                   , newPosition.y + squashedecbp[0].y - newecbp[0].y);
           }
         }
 
@@ -1426,8 +1439,8 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
           newIgnoringPushouts = "vert";
         }
 
-        // loop but without walls and corners
-        return collisionRoutine( newecbp, ecb1, newPosition, position
+        // loop, but ignoring everything that pushes out vertically
+        return collisionRoutine( squashedecbp, ecb1, newPosition, position
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
                                , newIgnoringPushouts
@@ -1517,6 +1530,7 @@ function inflateECB ( ecb : ECB, t : null | number
                              , new Vec2D ( focus.x         , focus.y + offset )
                              , new Vec2D ( focus.x - offset, focus.y          )
                              ];
+
   const closestCollision = findClosestCollision( ecb, pointlikeECB, focus, focus
                                                , relevantSurfaces
                                                , "no" // don't ignore any surfaces for this calculation
@@ -1602,7 +1616,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
   // ABOVE: this is recomputed every frame and should be avoided
   // --------------------------------------------------------------
 
-  let relevantVertSurfaces = stageWalls;
+  const relevantVertSurfaces = stageWalls;
 
   let relevantHorizSurfaces = [];
 
@@ -1615,7 +1629,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
       break;
     case "none":
     default:
-      relevantHorizSurfaces = stageGrounds.concat(stageCeilings).concat(stagePlatforms)
+      relevantHorizSurfaces = stageGrounds.concat(stageCeilings).concat(stagePlatforms);
       break;
   }
 
