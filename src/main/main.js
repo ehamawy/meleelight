@@ -21,7 +21,7 @@ import {
   targetRecords, targetsDestroyed, targetStagePlaying , getTargetCookies , giveMedals, medalTimes
 } from "target/targetplay";
 import {tssControls, drawTSS, drawTSSInit, getTargetStageCookies} from "../stages/targetselect";
-import {targetBuilder, targetBuilderControls, renderTargetBuilder} from "target/targetbuilder";
+import {targetBuilder, targetBuilderControls, renderTargetBuilder, showingCode} from "target/targetbuilder";
 import {destroyArticles, executeArticles, articlesHitDetection, executeArticleHits, renderArticles, resetAArticles} from "physics/article";
 import {runAI} from "main/ai";
 import {physics} from "physics/physics";
@@ -79,6 +79,7 @@ export const activePorts = [];
 export let playing = false;
 
 export let frameByFrame = false;
+export let wasFrameByFrame = false;
 export let frameByFrameRender = false;
 
 export let findingPlayers = true;
@@ -216,7 +217,7 @@ export function setKeyBinding (val){
   keyBinding = val;
 }
 export function overrideKeyboardEvent (e){
-  if (choosingTag == -1 && e.keyCode != 122 && e.keyCode != 116){
+  if (!showingCode && choosingTag == -1 && e.keyCode != 122 && e.keyCode != 116){
     switch(e.type){
       case "keydown":
         if (!keys[e.keyCode]) {
@@ -556,38 +557,56 @@ export const removePlayer (i){
 export function interpretInputs  (i, active,playertype, inputBuffer) {
   let tempBuffer = nullInputs();
 
-
-  if (! ( (gameMode == 3 || gameMode == 5) && !playing )) {
-    for (var k = 0; k < 7; k++) {
-      tempBuffer[7-k].lsX  = inputBuffer[6-k].lsX;
-      tempBuffer[7-k].lsY  = inputBuffer[6-k].lsY;
-      tempBuffer[7-k].rawX = inputBuffer[6-k].rawX;
-      tempBuffer[7-k].rawY = inputBuffer[6-k].rawY;
-      tempBuffer[7-k].csX  = inputBuffer[6-k].csX;
-      tempBuffer[7-k].csY  = inputBuffer[6-k].csY;
-      tempBuffer[7-k].lA   = inputBuffer[6-k].lA;
-      tempBuffer[7-k].rA   = inputBuffer[6-k].rA;
-      tempBuffer[7-k].s    = inputBuffer[6-k].s;
-      tempBuffer[7-k].a    = inputBuffer[6-k].a;
-      tempBuffer[7-k].b    = inputBuffer[6-k].b;
-      tempBuffer[7-k].x    = inputBuffer[6-k].x;
-      tempBuffer[7-k].y    = inputBuffer[6-k].y;
-      tempBuffer[7-k].r    = inputBuffer[6-k].r;
-      tempBuffer[7-k].l    = inputBuffer[6-k].l;
-      tempBuffer[7-k].dl   = inputBuffer[6-k].dl;
-      tempBuffer[7-k].dd   = inputBuffer[6-k].dd;
-      tempBuffer[7-k].dr   = inputBuffer[6-k].dr;
-      tempBuffer[7-k].du   = inputBuffer[6-k].du;
-    }
-  }
+  // keep updating Z and Start all the time, even when paused
   for (var k = 0; k < 7; k++) {
     tempBuffer[7-k].z    = inputBuffer[6-k].z;
+    tempBuffer[7-k].s    = inputBuffer[6-k].s;
   }
 
   tempBuffer[0] = pollInputs(gameMode, frameByFrame, mType[i], i, currentPlayers[i], keys,playertype);
 
+  let pastOffset = 0;
+  if ( (gameMode !== 3 && gameMode !== 5) || playing || wasFrameByFrame || (!playing && pause[i][0] && !pause[i][1])) {
+    pastOffset = 1;
+  }
+
   pause[i][1] = pause[i][0];
+  wasFrameByFrame = false;
   frameAdvance[i][1] = frameAdvance[i][0];
+
+  for (var k = 0; k < 7; k++) {
+    tempBuffer[7-k].lsX  = inputBuffer[7-k-pastOffset].lsX;
+    tempBuffer[7-k].lsY  = inputBuffer[7-k-pastOffset].lsY;
+    tempBuffer[7-k].rawX = inputBuffer[7-k-pastOffset].rawX;
+    tempBuffer[7-k].rawY = inputBuffer[7-k-pastOffset].rawY;
+    tempBuffer[7-k].csX  = inputBuffer[7-k-pastOffset].csX;
+    tempBuffer[7-k].csY  = inputBuffer[7-k-pastOffset].csY;
+    tempBuffer[7-k].lA   = inputBuffer[7-k-pastOffset].lA;
+    tempBuffer[7-k].rA   = inputBuffer[7-k-pastOffset].rA;
+    tempBuffer[7-k].a    = inputBuffer[7-k-pastOffset].a;
+    tempBuffer[7-k].b    = inputBuffer[7-k-pastOffset].b;
+    tempBuffer[7-k].x    = inputBuffer[7-k-pastOffset].x;
+    tempBuffer[7-k].y    = inputBuffer[7-k-pastOffset].y;
+    tempBuffer[7-k].r    = inputBuffer[7-k-pastOffset].r;
+    tempBuffer[7-k].l    = inputBuffer[7-k-pastOffset].l;
+    tempBuffer[7-k].dl   = inputBuffer[7-k-pastOffset].dl;
+    tempBuffer[7-k].dd   = inputBuffer[7-k-pastOffset].dd;
+    tempBuffer[7-k].dr   = inputBuffer[7-k-pastOffset].dr;
+    tempBuffer[7-k].du   = inputBuffer[7-k-pastOffset].du;
+  }
+
+  if (    (mType[i] === 10 && (tempBuffer[0].z ||  tempBuffer[1].z)) 
+       || (mType[i] !== 10 && (tempBuffer[0].z && !tempBuffer[1].z))
+     )  { 
+    frameAdvance[i][0] = true;
+  }
+  else {
+    frameAdvance[i][0] = false;
+  }
+
+  if (frameAdvance[i][0] && !frameAdvance[i][1] && !playing && gameMode !== 4) {
+    frameByFrame = true;
+  }
 
   if (mType[i] == 10) { // keyboard controls
 
@@ -598,28 +617,6 @@ export function interpretInputs  (i, active,playertype, inputBuffer) {
       pause[i][0] = false;
     }
 
-    if ((tempBuffer[0].z  || tempBuffer[1].z)) {
-      frameAdvance[i][0] = true;
-    } 
-    else {
-      frameAdvance[i][0] = false;
-    }
-
-    if (frameAdvance[i][0] && !frameAdvance[i][1] && !playing && gameMode != 4) {
-    frameByFrame = true;
-    }
-
-    if (active) {
-      if (tempBuffer[0].dl && !tempBuffer[1].dl ) {
-       player[i].showLedgeGrabBox ^= true;
-      }
-      if (tempBuffer[0].dd && !tempBuffer[1].dd) {
-        player[i].showECB ^= true;
-      }
-      if (tempBuffer[0].dr && !tempBuffer[1].dr) {
-        player[i].showHitbox ^= true;
-      }
-    }
     if ( (gameMode == 3 || gameMode == 5)
          && (tempBuffer[0].a || tempBuffer[1].a) && (tempBuffer[0].l || tempBuffer[1].l) 
          && (tempBuffer[0].r || tempBuffer[1].r) && (tempBuffer[0].s || tempBuffer[1].s)) {
@@ -660,27 +657,6 @@ export function interpretInputs  (i, active,playertype, inputBuffer) {
     }
     else {
       pause[i][0] = false;
-    }
-
-
-    if (tempBuffer[0].z && ! tempBuffer[1].z ) {
-      frameAdvance[i][0] = true;
-    } else {
-      frameAdvance[i][0] = false;
-    }
-
-    if (frameAdvance[i][0] && !frameAdvance[i][1] && !playing && gameMode != 4) {
-      frameByFrame = true;
-    }
-
-    if (tempBuffer[0].dl && !tempBuffer[1].dl) {
-      player[i].showLedgeGrabBox ^= true;
-    }
-    if (tempBuffer[0].dd && !tempBuffer[1].dd) {
-      player[i].showECB ^= true;
-    }
-    if (tempBuffer[0].dr && !tempBuffer[1].dr) {
-      player[i].showHitbox ^= true;
     }
 
     // Controller reset functionality
@@ -725,6 +701,19 @@ export function interpretInputs  (i, active,playertype, inputBuffer) {
     }
 
   }
+
+  if (active) {
+    if (tempBuffer[0].dl && !tempBuffer[1].dl ) {
+     player[i].showLedgeGrabBox ^= true;
+    }
+    if (tempBuffer[0].dd && !tempBuffer[1].dd) {
+      player[i].showECB ^= true;
+    }
+    if (tempBuffer[0].dr && !tempBuffer[1].dr) {
+      player[i].showHitbox ^= true;
+    }
+  }
+
   return tempBuffer;
 
 }
@@ -887,6 +876,7 @@ export function gameTick (oldInputBuffers){
       }
       if (frameByFrame) {
         frameByFrameRender = true;
+        wasFrameByFrame = true;
       }
       frameByFrame = false;
 
@@ -929,6 +919,7 @@ export function gameTick (oldInputBuffers){
     getActiveStage().movingPlatforms();
     destroyArticles();
     executeArticles();
+
     for (var i = 0; i < 4; i++) {
       if (playerType[i] > -1) {
         if(!starting) {
@@ -956,6 +947,7 @@ export function gameTick (oldInputBuffers){
     }
     if (frameByFrame) {
       frameByFrameRender = true;
+      wasFrameByFrame = true;
     }
     frameByFrame = false;
 
