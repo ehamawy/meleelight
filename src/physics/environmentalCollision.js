@@ -1305,6 +1305,33 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
   return closestCenterAndTouchingType(suggestedMaybeCenterAndTouchingData);
 };
 
+function reinflateECB ( ecb : ECB, position : Vec2D
+                      , touchingData : null | [string, number, number | null]
+                      , relevantSurfaces : Array<LabelledSurface>
+                      , oldecbSquashData : null | [Vec2D, number]
+                      , stage : Stage
+                      , connectednessFunction : ConnectednessFunction
+                      ) : [Vec2D, null | [string, number], null | [Vec2D, number]] {
+  
+  if (oldecbSquashData !== null) {
+    const q = 1 / oldecbSquashData[1];
+    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (q-1)*position.x , q*ecb[0].y + (q-1)*position.y )
+                        , new Vec2D ( q*ecb[1].x + (q-1)*position.x , q*ecb[1].y + (q-1)*position.y )
+                        , new Vec2D ( q*ecb[2].x + (q-1)*position.x , q*ecb[2].y + (q-1)*position.y )
+                        , new Vec2D ( q*ecb[3].x + (q-1)*position.x , q*ecb[3].y + (q-1)*position.y )
+                        ];
+    const ecbSquashData = inflateECB (fullsizeecb, null, relevantSurfaces, stage, connectednessFunction);
+    if (ecbSquashData !== null) {
+      const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
+      const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
+                                   , position.y ); // + squashedecb[0].y - ecb[0].y);
+      return [newPosition, touchingData, ecbSquashData];
+    }
+  }
+  return [position, touchingData, null];
+};
+
+
 // this function loops over all walls/surfaces it is provided, calculating the collision offsets that each ask for,
 // and at each iteration returning the smallest possible offset (i.e. collision with smallest sweeping parameter)
 function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
@@ -1323,6 +1350,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 
   let touchingData = oldTouchingData;
   let ecbSquashData = oldecbSquashData;
+  const oldSquashFactor = oldecbSquashData === null ? 1 : oldecbSquashData[1];
   const allRelevantSurfaces = relevantVertSurfaces.concat(relevantHorizSurfaces);
   let currentRelevantSurfaces = [];
   switch (ignoringPushouts) {
@@ -1336,19 +1364,21 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
     case "vert": // ignoring vertical pushout, so not ignoring vertical surfaces
       currentRelevantSurfaces = relevantVertSurfaces;
       break;
+    case "all": // ignoring all pushouts
+      currentRelevantSurfaces = [];
+      break;
   }
   let newIgnoringPushouts = ignoringPushouts;
 
-  if (passNumber > maximumCollisionDetectionPasses) {
-    //console.log("'collisionRoutine': reached maximum pass number, aborting.");
-    if (touchingData !== null) {
-      ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);    
-      return [position, [touchingData[0], touchingData[1]], ecbSquashData];
-    }
-    else {
-      return [position, null, ecbSquashData];
-    }
-    
+  if (passNumber > maximumCollisionDetectionPasses || ignoringPushouts === "all") {
+    // try to re-inflate the ECB, and end
+    //console.log("'collisionRoutine': ending collision routine prematurely.");
+    return reinflateECB( ecbp, position, touchingData
+                       , allRelevantSurfaces
+                       , ecbSquashData
+                       , stage
+                       , connectednessFunction
+                       );    
   }
   else {
     //console.log("'collisionRoutine': pass number "+passNumber+".");
@@ -1358,22 +1388,15 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                                                  , newIgnoringPushouts
                                                  , stage, connectednessFunction);
     if (closestCollision === null) {
-      //console.log("'collisionRoutine': no collision detected on this pass.");
-      // if no collision occured, end
-      if (touchingData !== null) {
-        ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
-        return [position, [touchingData[0], touchingData[1]], ecbSquashData];
-      }
-      else {
-        return [position, null, ecbSquashData];
-      }
+      // if no collision occured, try to re-inflate the ECB, and end
+      //console.log("'collisionRoutine': no collision detected on this pass.");      
+      return reinflateECB( ecbp, position, touchingData
+                         , allRelevantSurfaces
+                         , ecbSquashData
+                         , stage
+                         , connectednessFunction
+                         );
     }
-
-
-
-    // TODO: when there is a conflict in pushout, do a squash and then eliminate that kind of walls from the loop, instead of stoppin the loop altogether
-    // also need to add a variable for ignoring corner collisions in the case of eliminating walls
-
     else {
       
       let newPosition = closestCollision[0];
@@ -1383,7 +1406,6 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       const newecbp = moveECB (ecbp, vec);
       let squashedecbp = newecbp;
 
-
       // first, check for pushout conflicts
       if (    (pushoutSigns[0] === "+" && vec.x < 0)
            || (pushoutSigns[0] === "-" && vec.x > 0)
@@ -1391,14 +1413,13 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 
         //console.log("'collisionRoutine': horizontal pushout conflict.");
 
-        if (touchingData !== null) {
-
-          //console.log("old angular parameter is "+(touchingData[2] === null ? "null": touchingData[2].toString())+".");
-          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
+        if (touchingData !== null) { // should be impossible for touchingData to be null at this point
+          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);          
           if (ecbSquashData !== null) {
+            ecbSquashData[1] *= oldSquashFactor;
             squashedecbp = squashECBAt(newecbp, ecbSquashData);
             newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - newecbp[0].x
-                                   , newPosition.y + squashedecbp[0].y - newecbp[0].y);
+                                   , newPosition.y ); // + squashedecbp[0].y - newecbp[0].y);
           }
         }
 
@@ -1409,7 +1430,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
           newIgnoringPushouts = "horiz";
         }
 
-        // loop, but ignoring everything that pushes out horizontally (walls and corners)
+        // loop (now ignoring everything that pushes out horizontally, i.e. walls and corners)
         return collisionRoutine( squashedecbp, ecb1, newPosition, position
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
@@ -1424,12 +1445,13 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 
         //console.log("'collisionRoutine': vertical pushout conflict.");
 
-        if (touchingData !== null) {
-          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
+        if (touchingData !== null) { // should be impossible for touchingData to be null at this point
+          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);          
           if (ecbSquashData !== null) {
+            ecbSquashData[1] *= oldSquashFactor;
             squashedecbp = squashECBAt(newecbp, ecbSquashData);
             newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - newecbp[0].x
-                                   , newPosition.y + squashedecbp[0].y - newecbp[0].y);
+                                   , newPosition.y ); // + squashedecbp[0].y - newecbp[0].y);
           }
         }
 
@@ -1440,7 +1462,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
           newIgnoringPushouts = "vert";
         }
 
-        // loop, but ignoring everything that pushes out vertically
+        // loop (now ignoring everything that pushes out vertically)
         return collisionRoutine( squashedecbp, ecb1, newPosition, position
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
@@ -1595,6 +1617,7 @@ function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeC
 
 // this function initialises necessary data and then calls the main collision routine loop
 export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
+                                   , ecbSquashData : null | [Vec2D, number]
                                    , horizIgnore : string
                                    , stage : Stage
                                    , connectednessFunction : ConnectednessFunction
@@ -1640,7 +1663,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
                          , "no" // start off not ignoring any pushouts
                          , stage, connectednessFunction
                          , null // start off not touching anything
-                         , null // start off without ECB squashing
+                         , ecbSquashData
                          , 1 // start off at pass number 1
                          );
 };

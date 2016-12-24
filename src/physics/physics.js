@@ -370,7 +370,10 @@ function hitlagSwitchUpdate(i : number, input : any) : void {
     }
     //console.log(actionStates[characterSelections[i]][player[i].actionState]);
     player[i].phys.canWallJump = actionStates[characterSelections[i]][player[i].actionState].wallJumpAble;
-    player[i].phys.bTurnaroundTimer = Math.max(0, player[i].phys.bTurnaroundTimer - 1);
+    player[i].phys.bTurnaroundTimer--;
+    if (player[i].phys.bTurnaroundTimer < 0) {
+      player[i].phys.bTurnaroundTimer = 0;
+    }
 
     if ((input[i][0].lsX > 0.9 && input[i][1].lsX < 0.9) ||
         (input[i][0].lsX < -0.9 && input[i][1].lsX > -0.9)) {
@@ -559,7 +562,6 @@ function findAndResolveCollisions ( i : number, input : any
   const alreadyGrounded = player[i].phys.grounded;
   let stillGrounded = oldStillGrounded;
   let backward = oldBackward;
-  let groundedECBSquashData = null;
   const notTouchingWalls = oldNotTouchingWalls;
 
   const connectedSurfaces = activeStage.connected;
@@ -589,11 +591,6 @@ function findAndResolveCollisions ( i : number, input : any
 
     [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connectednessFunction, input);
 
-    const groundSquashFactor = groundedECBSquashFactor(player[i].phys.ECBp, toList(activeStage.ceiling));
-    if (groundSquashFactor !== null) {
-      groundedECBSquashData = [player[i].phys.pos, groundSquashFactor];
-    }
-
   }
 
   // end of grounded state movement
@@ -619,16 +616,15 @@ function findAndResolveCollisions ( i : number, input : any
                                             , player[i].phys.ECB1
                                             , player[i].phys.pos
                                             , player[i].phys.posPrev
+                                            , ecbSquashData[i]
                                             , horizIgnore
                                             , activeStage
                                             , connectednessFunction
                                             );
 
-  if (collisionData[1] === null) {
-    // no collision, do nothing
-    ecbSquashData[i] = groundedECBSquashData;
-  }
-  else {
+  ecbSquashData[i] = collisionData[2];
+
+  if ( collisionData[1] !== null ) {
     const newPosition = collisionData[0];
     const ecbpBottom = new Vec2D ( player[i].phys.ECBp[0].x + newPosition.x - player[i].phys.pos.x
                                  , player[i].phys.ECBp[0].y + newPosition.y - player[i].phys.pos.y);
@@ -661,16 +657,7 @@ function findAndResolveCollisions ( i : number, input : any
         break;
     }
 
-    if (    collisionData[2] !== null 
-         && (     groundedECBSquashData === null
-              || (groundedECBSquashData !== null && collisionData[2][1] < groundedECBSquashData[1] )
-            )
-       ) {
-      ecbSquashData[i] = collisionData[2];
-    }
-    else {
-      ecbSquashData[i] = groundedECBSquashData;
-    }
+    
 
     /*
     if (ecbSquashData[i] !== null) {
@@ -679,6 +666,20 @@ function findAndResolveCollisions ( i : number, input : any
     */
 
   }
+
+  // finally, calculate how much squashing is required by the ground
+  const fullSizeECBp = [ new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] )
+                       , new Vec2D(player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
+                       , new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] )
+                       , new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
+                       ];
+  const groundSquashFactor = groundedECBSquashFactor(fullSizeECBp, toList(activeStage.ceiling));
+  if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
+    ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];
+  }
+
+
+
   return [stillGrounded, backward, notTouchingWalls];
 };
 
@@ -946,11 +947,11 @@ export function physics (i : number, input : any) : void {
     new Vec2D(x - ecbOffset[1], y + ecbOffset[2] )
   ];
 
-  /*
+  
   if (ecbSquashData[i] !== null) {
     player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, ecbSquashData[i]);
   }
-  */
+  
 
 
 
