@@ -559,7 +559,6 @@ function findAndResolveCollisions ( i : number, input : any
                                   , oldNotTouchingWalls : [bool, bool]
                                   , ecbOffset : [number, number, number, number] ) : [bool, bool, [bool, bool]] {
 
-  const alreadyGrounded = player[i].phys.grounded;
   let stillGrounded = oldStillGrounded;
   let backward = oldBackward;
   const notTouchingWalls = oldNotTouchingWalls;
@@ -576,7 +575,7 @@ function findAndResolveCollisions ( i : number, input : any
   // ------------------------------------------------------------------------------------------------------
   // grounded state movement
 
-  if (alreadyGrounded) {
+  if (player[i].phys.grounded) {
 
     const relevantGroundIndex = player[i].phys.onSurface[1];
     let relevantGroundType = "g";
@@ -603,7 +602,7 @@ function findAndResolveCollisions ( i : number, input : any
 
   let horizIgnore = "none"; // ignore no horizontal surfaces by default
 
-  if (alreadyGrounded && stillGrounded) {
+  if (player[i].phys.grounded) {
     horizIgnore = "all"; // ignore all vertical surfaces when grounded
   }
   else {
@@ -641,13 +640,13 @@ function findAndResolveCollisions ( i : number, input : any
         dealWithWallCollision(i, newPosition, "r", surfaceIndex, input);
         break;
       case "g": // player landed on ground
-        dealWithGroundCollision(i, alreadyGrounded, newPosition, ecbpBottom, surfaceIndex, input);
+        dealWithGroundCollision(i, player[i].phys.grounded, newPosition, ecbpBottom, surfaceIndex, input);
         break;
       case "c": // player touching ceiling
         dealWithCeilingCollision(i, newPosition, ecbOffset, input);
         break;
       case "p": // player landed on platform
-        dealWithPlatformCollision(i, alreadyGrounded, newPosition, ecbpBottom, surfaceIndex, input);
+        dealWithPlatformCollision(i, player[i].phys.grounded, newPosition, ecbpBottom, surfaceIndex, input);
         break;
       case "x": // corner collision
         dealWithCollision(i, newPosition);
@@ -668,16 +667,16 @@ function findAndResolveCollisions ( i : number, input : any
   }
 
   // finally, calculate how much squashing is required by the ground
-  const fullSizeECBp = [ new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] )
-                       , new Vec2D(player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
-                       , new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] )
-                       , new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )];
-  const groundSquashFactor = groundedECBSquashFactor(fullSizeECBp, toList(activeStage.ceiling));
-  if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
-    ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];
+  if (player[i].phys.grounded) {
+    const fullSizeECBp = [ new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] )
+                         , new Vec2D(player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
+                         , new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] )
+                         , new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )];
+    const groundSquashFactor = groundedECBSquashFactor(fullSizeECBp, toList(activeStage.ceiling));
+    if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
+      ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];
+    }
   }
-
-
 
   return [stillGrounded, backward, notTouchingWalls];
 };
@@ -891,23 +890,9 @@ export function physics (i : number, input : any) : void {
   outOfCameraUpdate(i);
   lCancelUpdate(i, input);
 
-
-  const x = player[i].phys.pos.x;
-  const y = player[i].phys.pos.y;
-
   if (!player[i].phys.grounded) {
     player[i].phys.airborneTimer++;
   }
-
-
-
-  /*if (player[i].actionState == 11){
-    player[i].phys.ECBp = [new Vec2D(0+x,1+y),new Vec2D(3+x,9+y),new Vec2D(0+x,14+y),new Vec2D(-3+x,9+y)];
-  }
-  else if (player[i].actionState == 24){
-    player[i].phys.ECBp = [new Vec2D(0+x,1+y),new Vec2D(2+x,9+y),new Vec2D(0+x,14+y),new Vec2D(-2+x,9+y)];
-  }*/
-
 
   //console.log(player[i].timer);
   let frame = Math.floor(player[i].timer);
@@ -918,6 +903,7 @@ export function physics (i : number, input : any) : void {
     frame = framesData[characterSelections[i]][player[i].actionState];
   }
   //console.log(actionStates[characterSelections[i]][player[i].actionState].name+" "+(frame-1));
+
   /* global ecb */
   declare var ecb : any;
   let ecbOffset = ecb[characterSelections[i]][player[i].actionState][frame - 1];
@@ -940,18 +926,16 @@ export function physics (i : number, input : any) : void {
   }
 
   player[i].phys.ECBp = [
-    new Vec2D(x               , y + ecbOffset[0] ),
-    new Vec2D(x + ecbOffset[1], y + ecbOffset[2] ),
-    new Vec2D(x               , y + ecbOffset[3] ),
-    new Vec2D(x - ecbOffset[1], y + ecbOffset[2] )
+    new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] ),
+    new Vec2D(player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] ),
+    new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] ),
+    new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
   ];
 
   
   if (ecbSquashData[i] !== null) {
     player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, ecbSquashData[i]);
   }
-  
-
 
 
   if (!actionStates[characterSelections[i]][player[i].actionState].ignoreCollision) {
@@ -1026,54 +1010,35 @@ export function physics (i : number, input : any) : void {
   dealWithLedges(i, input);
   dealWithDeath(i, input);
 
-  {
+  
+  player[i].phys.hurtbox = new Box2D(
+    [
+      player[i].phys.pos.x - player[i].charAttributes.hurtboxOffset[0],
+      player[i].phys.pos.y + player[i].charAttributes.hurtboxOffset[1] 
+    ],
+    [
+      player[i].phys.pos.x + player[i].charAttributes.hurtboxOffset[0],
+      player[i].phys.pos.y
+    ]
+  );
+  
+ 
+  player[i].phys.ECB1 = [
+    new Vec2D( player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] ),
+    new Vec2D( player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] ),
+    new Vec2D( player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] ),
+    new Vec2D( player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
+  ];
 
-    const x = player[i].phys.pos.x;
-    const y = player[i].phys.pos.y;
-  
-    player[i].phys.hurtbox = new Box2D(
-      [
-        -player[i].charAttributes.hurtboxOffset[0] + x,
-        player[i].charAttributes.hurtboxOffset[1] + y
-      ],
-      [
-        player[i].charAttributes.hurtboxOffset[0] + x,
-        y
-      ]
-    );
-  
-    // check collisions and stuff
-    /*if (player[i].actionState === 11){
-      player[i].phys.ECB1 = [new Vec2D(0+x,1+y),new Vec2D(3+x,9+y),new Vec2D(0+x,14+y),new Vec2D(-3+x,9+y)];
-    }
-    else if (player[i].actionState === 24){
-      player[i].phys.ECB1 = [new Vec2D(0+x,1+y),new Vec2D(2+x,9+y),new Vec2D(0+x,14+y),new Vec2D(-2+x,9+y)];
-    }*/
-    //player[i].phys.ECB1 = [new Vec2D(0+x,ecbOffset[0]+y),new Vec2D(ecbOffset[1]+x,ecbOffset[2]+y),new Vec2D(0+x,ecbOffset[3]+y),new Vec2D(ecbOffset[1]*-1+x,ecbOffset[2]+y)];
-  
-    player[i].phys.ECB1 = [
-      new Vec2D( x               , y + ecbOffset[0] ),
-      new Vec2D( x + ecbOffset[1], y + ecbOffset[2] ),
-      new Vec2D( x               , y + ecbOffset[3] ),
-      new Vec2D( x - ecbOffset[1], y + ecbOffset[2] )
-    ];
-
-    if (ecbSquashData[i] !== null) {
-      player[i].phys.ECB1 = squashECBAt(player[i].phys.ECB1, ecbSquashData[i]);
-    }
-  
-    if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
-      player[i].phys.ECB1[0].y = y;
-    }
-
+  if (ecbSquashData[i] !== null) {
+    player[i].phys.ECB1 = squashECBAt(player[i].phys.ECB1, ecbSquashData[i]);
   }
 
-  /*else if (player[i].phys.grounded || player[i].phys.airborneTimer < 10){
-    player[i].phys.ECB1 = [new Vec2D(0+x,0+y),new Vec2D(3+x,7+y),new Vec2D(0+x,14+y),new Vec2D(-3+x,7+y)];
+  
+  
+  if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
+    player[i].phys.ECB1[0].y = player[i].phys.pos.y;
   }
-  else {
-    player[i].phys.ECB1 = [new Vec2D(0+x,4+y),new Vec2D(3+x,9+y),new Vec2D(0+x,14+y),new Vec2D(-3+x,9+y)];
-  }*/
 
   if (gameMode === 3 && player[i].phys.posPrev.y > -80 && player[i].phys.pos.y <= -80) {
     sounds.lowdown.play();
