@@ -1315,10 +1315,10 @@ function reinflateECB ( ecb : ECB, position : Vec2D
   
   if (oldecbSquashData !== null) {
     const q = 1 / oldecbSquashData[1];
-    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (q-1)*position.x , q*ecb[0].y + (q-1)*position.y )
-                        , new Vec2D ( q*ecb[1].x + (q-1)*position.x , q*ecb[1].y + (q-1)*position.y )
-                        , new Vec2D ( q*ecb[2].x + (q-1)*position.x , q*ecb[2].y + (q-1)*position.y )
-                        , new Vec2D ( q*ecb[3].x + (q-1)*position.x , q*ecb[3].y + (q-1)*position.y )
+    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*position.x , q*ecb[0].y + (1-q)*position.y )
+                        , new Vec2D ( q*ecb[1].x + (1-q)*position.x , q*ecb[1].y + (1-q)*position.y )
+                        , new Vec2D ( q*ecb[2].x + (1-q)*position.x , q*ecb[2].y + (1-q)*position.y )
+                        , new Vec2D ( q*ecb[3].x + (1-q)*position.x , q*ecb[3].y + (1-q)*position.y )
                         ];
     const ecbSquashData = inflateECB (fullsizeecb, null, relevantSurfaces, stage, connectednessFunction);
     if (ecbSquashData !== null) {

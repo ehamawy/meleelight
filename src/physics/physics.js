@@ -671,8 +671,7 @@ function findAndResolveCollisions ( i : number, input : any
   const fullSizeECBp = [ new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] )
                        , new Vec2D(player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
                        , new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] )
-                       , new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
-                       ];
+                       , new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )];
   const groundSquashFactor = groundedECBSquashFactor(fullSizeECBp, toList(activeStage.ceiling));
   if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
     ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];
