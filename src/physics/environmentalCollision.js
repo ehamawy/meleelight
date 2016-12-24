@@ -1505,22 +1505,22 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 };
 
 // finds the ECB squash factor for a grounded ECB
-export function groundedECBSquashFactor( ecb : ECB, ceilings : Array<[Vec2D, Vec2D]>) : null | number {
+export function groundedECBSquashFactor( ecbTop : Vec2D, ecbBottom : Vec2D, ceilings : Array<[Vec2D, Vec2D]>) : null | number {
   const ceilingYValues = ceilings.map ( (ceil) => {
-    if (ecb[2].x < extremePoint(ceil, "l").x || ecb[2].x > extremePoint(ceil, "r").x ) {
+    if (ecbTop.x < extremePoint(ceil, "l").x || ecbTop.x > extremePoint(ceil, "r").x ) {
       return null;
     } 
     else {
-      return coordinateIntercept( [ ecb[0], ecb[2] ] , ceil).y;
+      return coordinateIntercept( [ ecbBottom, ecbTop ] , ceil).y;
     }
   } );
-  const lowestCeilingYValue = findSmallestWithin(ceilingYValues, ecb[0].y, ecb[2].y);
+  const lowestCeilingYValue = findSmallestWithin(ceilingYValues, ecbBottom.y, ecbTop.y);
   const offset = additionalOffset/10;
   if (lowestCeilingYValue === null) {
     return null;
   }
   else {
-    return ( Math.max(offset, (lowestCeilingYValue - ecb[0].y) / (ecb[2].y - ecb[0].y) - offset));
+    return ( Math.max(offset, (lowestCeilingYValue - ecbBottom.y) / (ecbTop.y - ecbBottom.y) - offset));
   }
 };
 

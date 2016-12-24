@@ -609,8 +609,8 @@ function findAndResolveCollisions ( i : number, input : any
     horizIgnore = notIgnoringPlatforms? "none" : "platforms";
   }
 
-  // type : [ Vec2D       , null | [string, number], null | number     ]
-  //        [ new position, collision label        , ECB squash factor ]
+  // type : [ Vec2D       , null | [string, number], null | [Vec2D, number] ]
+  //        [ new position, collision label        , ECB squash data        ]
   const collisionData = runCollisionRoutine ( player[i].phys.ECBp
                                             , player[i].phys.ECB1
                                             , player[i].phys.pos
@@ -622,11 +622,12 @@ function findAndResolveCollisions ( i : number, input : any
                                             );
 
   ecbSquashData[i] = collisionData[2];
+  const ecbSquashFactor = ecbSquashData[i] === null ? 1 : ecbSquashData[i][1];
 
   if ( collisionData[1] !== null ) {
     const newPosition = collisionData[0];
-    const ecbpBottom = new Vec2D ( player[i].phys.ECBp[0].x + newPosition.x - player[i].phys.pos.x
-                                 , player[i].phys.ECBp[0].y + newPosition.y - player[i].phys.pos.y);
+    const ecbpBottom = new Vec2D ( newPosition.x
+                                 , newPosition.y + ecbSquashFactor * ecbOffset[0]);
     const surfaceLabel = collisionData[1][0];
     const surfaceIndex = collisionData[1][1];
 
@@ -668,13 +669,14 @@ function findAndResolveCollisions ( i : number, input : any
 
   // finally, calculate how much squashing is required by the ground
   if (player[i].phys.grounded) {
-    const fullSizeECBp = [ new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] )
-                         , new Vec2D(player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
-                         , new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] )
-                         , new Vec2D(player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )];
-    const groundSquashFactor = groundedECBSquashFactor(fullSizeECBp, toList(activeStage.ceiling));
+    const groundSquashFactor = groundedECBSquashFactor( new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y + ecbOffset[3] ) //    top non-squashed ECBp point
+                                                      , new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y) // + ecbOffset[0] ) // bottom non-squashed ECBp point, no offset as grounded
+                                                      , toList(activeStage.ceiling));
     if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
       ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];
+    }
+    if (ecbSquashData[i] !== null) {
+      ecbSquashData[i][0] = player[i].phys.pos; // always squash from the bottom ECB point if player is grounded
     }
   }
 
@@ -1034,7 +1036,7 @@ export function physics (i : number, input : any) : void {
     player[i].phys.ECB1 = squashECBAt(player[i].phys.ECB1, ecbSquashData[i]);
   }
 
-  
+
   
   if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
     player[i].phys.ECB1[0].y = player[i].phys.pos.y;
