@@ -650,27 +650,20 @@ function findAndResolveCollisions ( i : number, input : any
         dealWithPlatformCollision(i, player[i].phys.grounded, newPosition, ecbpBottom, surfaceIndex, input);
         break;
       case "x": // corner collision
+      case "n": // wall collision but player no longer in contact with wall
         dealWithCollision(i, newPosition);
         break;
       default:
-        console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform/corner");
+        console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform/corner/none");
         break;
     }
-
-    
-
-    /*
-    if (ecbSquashData[i] !== null) {
-      console.log("ecbSquashData[i][1]="+ecbSquashData[i][1]+".");
-    }
-    */
 
   }
 
   // finally, calculate how much squashing is required by the ground
   if (player[i].phys.grounded) {
     const groundSquashFactor = groundedECBSquashFactor( new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y + ecbOffset[3] ) //    top non-squashed ECBp point
-                                                      , new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y) // + ecbOffset[0] ) // bottom non-squashed ECBp point, no offset as grounded
+                                                      , new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y ) // bottom non-squashed ECBp point, no offset as grounded
                                                       , toList(activeStage.ceiling));
     if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
       ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];

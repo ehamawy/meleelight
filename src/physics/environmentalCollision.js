@@ -280,15 +280,19 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
     if (! (lineSweepResult === null) ) {
       [t,s] = lineSweepResult;
 
-      let additionalPushout = additionalOffset; // additional pushout
+      let sign = 1;
+      let cornerSide = 3;
       if (same === 1 || other === 1) {
-        additionalPushout = -additionalOffset;
+        sign = -1;
+        cornerSide = 1;
       }
       
       const xIntersect = coordinateIntercept( [ ecbp[same], ecbp[other] ], [ corner, new Vec2D( corner.x+1, corner.y ) ]).x;
-      const angularParameter = getAngularParameter((xIntersect - ecbp[same].x) / (ecbp[other].x - ecbp[same].x), same, other);
+      let pushout = corner.x - xIntersect ;
+      pushout = sign * Math.min(sign * pushout, sign * (corner.x - ecbp[cornerSide].x));
+      const angularParameter = getAngularParameter(t, same, other);
       //console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
-      return ( ["x"+wallType, corner.x - xIntersect + additionalPushout, s, angularParameter] ); // s is the sweeping parameter, t just moves along the edge
+      return ( ["x"+wallType, pushout + sign*additionalOffset, s, angularParameter] ); // s is the sweeping parameter, t just moves along the edge
     }
     else {
       //console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross "+wallType+" corner.");
@@ -960,8 +964,8 @@ function getAngularParameter ( t : number, same : number, other : number) {
 };
 
 
-// touching data is null, or: new position, maybe wall type and index, sweeping parameter
-type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], number];
+// touching data is null, or: new position, maybe wall type and index, sweeping parameter, angular parameter
+type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], number, null | number];
 
 // ecbp : projected ECB
 // ecb1 : old ECB
@@ -1227,6 +1231,11 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
             if (pushout !== 0) {
               const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
               closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
+              // if same-side ECB point is no longer within wall bounds, return a "none" type collision instead
+              if (ecbp[same].y > wallTop.y || ecbp[same].y < wallBottom.y) {
+                closestPointCollision[0] = "n";
+              }
+
             }
           }
         } 
@@ -1298,7 +1307,11 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
 
   for (let i = 0; i < collisionData.length; i++) {
     if (collisionData[i][0] !== null) {
-      suggestedMaybeCenterAndTouchingData.push( [collisionData[i][0][1], [collisionData[i][0][0], collisionData[i][1][1]], collisionData[i][0][2] ]);
+      suggestedMaybeCenterAndTouchingData.push( [ collisionData[i][0][1]
+                                                , [collisionData[i][0][0], collisionData[i][1][1]]
+                                                , collisionData[i][0][2]
+                                                , collisionData[i][0][3] 
+                                                ]);
     }
   }
 
@@ -1401,7 +1414,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       
       let newPosition = closestCollision[0];
       const surfaceTypeAndIndex = closestCollision[1];
-      const angularParameter = closestCollision[2];
+      const angularParameter = closestCollision[3];
       const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
       const newecbp = moveECB (ecbp, vec);
       let squashedecbp = newecbp;
@@ -1414,6 +1427,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
         //console.log("'collisionRoutine': horizontal pushout conflict.");
 
         if (touchingData !== null) { // should be impossible for touchingData to be null at this point
+          console.log("'collisionRoutine': giving touchingData[2]="+(touchingData[2]===null?"null":touchingData[2])+" to 'inflateECB'.");
           ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);          
           if (ecbSquashData !== null) {
             ecbSquashData[1] *= oldSquashFactor;
@@ -1553,6 +1567,10 @@ function inflateECB ( ecb : ECB, t : null | number
                              , new Vec2D ( focus.x         , focus.y + offset )
                              , new Vec2D ( focus.x - offset, focus.y          )
                              ];
+
+  console.log("'inflateECB': parameter t="+(t===null?"null":t)+".");
+  console.log("'inflateECB': focus for this parameter at ("+focus.x+","+focus.y+").");
+
 
   const closestCollision = findClosestCollision( ecb, pointlikeECB, focus, focus
                                                , relevantSurfaces
