@@ -9,10 +9,10 @@ import {solveQuadraticEquation} from "../main/util/solveQuadraticEquation";
 import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {connectednessFromChains} from "../stages/util/connectednessFromChains";
-import {moveECB, squashECBAt} from "../main/util/ecbTransform";
+import {moveECB, squashECBAt, ecbFocusFromAngularParameter} from "../main/util/ecbTransform";
 import {zipLabels} from "../main/util/zipLabels";
 import {getSurfaceFromStage} from "../stages/stage";
-import {addToIgnoreList, isIgnored, cornerIsIgnored} from "./surfaceIgnoreList";
+import {addToIgnoreList, isIgnored, cornerIsIgnored, cornerIsIgnoredInSurfaces} from "./ignoreList";
 
 // eslint-disable-next-line no-duplicate-imports
 import type {ECB} from "../main/util/ecbTransform";
@@ -21,17 +21,14 @@ import type {ConnectednessFunction} from "../stages/util/connectednessFromChains
 // eslint-disable-next-line no-duplicate-imports
 import type {Stage} from "../stages/stage";
 // eslint-disable-next-line no-duplicate-imports
-import type {ignoreList} from "./surfaceIgnoreList";
+import type {IgnoreList, IgnoreLists} from "./ignoreList";
 
 
 const magicAngle : number = Math.PI/6;
 const maximumCollisionDetectionPasses = 15;
 export const additionalOffset : number = 0.00001;
 
-
-let surfaceIgnoreList : ignoreList = [];
 const pushoutSigns : [null | string, null | string] = [null, null];
-
 
 // -----------------------------------------------------
 // various utility functions
@@ -176,17 +173,17 @@ function pointSweepingCheck ( wall : [Vec2D, Vec2D], wallType : string, wallInde
     const s = coordinateInterceptParameter (wall, [relevantECB1Point, relevantECBpPoint]); // need to put wall first
 
     if (s > 1 || s < 0 || isNaN(s) || s === Infinity) {
-      //console.log("'pointSweepingCheck': no collision with "+wallType+" surface, sweeping parameter outside of allowable range.");
+      console.log("'pointSweepingCheck': no collision with "+wallType+" surface, sweeping parameter outside of allowable range.");
       return null; // no collision
     }
     else {
       const intersection = new Vec2D (relevantECB1Point.x + s*(relevantECBpPoint.x-relevantECB1Point.x), relevantECB1Point.y + s*(relevantECBpPoint.y-relevantECB1Point.y));
       if (getXOrYCoord(intersection, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) || getXOrYCoord(intersection, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY)) {
-        //console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
+        console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
         return null; // no collision
       }
       else {
-        //console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
+        console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
         return s ;
       }
     }
@@ -249,7 +246,10 @@ function lineSweepParameters( line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D], fl
 // returns null (for no collision) or collision data: ["x", pushout value, sweeping parameter, angular parameter]
 function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : number
                           , position : Vec2D, counterclockwise : boolean
-                          , corner : Vec2D, wallType : string) : null | [string, number, number, number | null] {
+                          , ignoreLists : IgnoreLists
+                          , corner : Vec2D, wallType : string) : null | [string, number, number, number | null, IgnoreLists] {
+
+  const [surfaceIgnoreList, cornerIgnoreList] = ignoreLists;
 
   // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
   let interiorECBside = "l";   
@@ -289,18 +289,20 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
       
       const xIntersect = coordinateIntercept( [ ecbp[same], ecbp[other] ], [ corner, new Vec2D( corner.x+1, corner.y ) ]).x;
       let pushout = corner.x - xIntersect ;
+
+      // temporary hack, TODO: this function should call the horizontal pushout routine if the second argument of the minimum is chosen
       pushout = sign * Math.min(sign * pushout, sign * (corner.x - ecbp[cornerSide].x));
       const angularParameter = getAngularParameter(t, same, other);
-      //console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
-      return ( ["x"+wallType, pushout + sign*additionalOffset, s, angularParameter] ); // s is the sweeping parameter, t just moves along the edge
+      console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
+      return ( ["x"+wallType, pushout + sign*additionalOffset, s, angularParameter, [surfaceIgnoreList, cornerIgnoreList.concat(corner)]] ); // s is the sweeping parameter, t just moves along the edge
     }
     else {
-      //console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross "+wallType+" corner.");
+      console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross "+wallType+" corner.");
       return null;
     }
   }
   else {
-    //console.log("'edgeSweepingCheck': no edge collision, "+wallType+" corner did not switch relevant ECB edge sides.");
+    console.log("'edgeSweepingCheck': no edge collision, "+wallType+" corner did not switch relevant ECB edge sides.");
     return null;
   }
 };
@@ -313,10 +315,14 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
                         , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                         , oldTotalPushout : number, previousPushout : number
                         , situation
-                        , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number] {
-  //console.log("'getHorizPushout': working with "+wallType+""+wallIndex+".");
-  //console.log("'getHorizPushout': pushout total was "+oldTotalPushout+".");
-  //console.log("'getHorizPushout': previous pushout was "+previousPushout+".");
+                        , ignoreLists : IgnoreLists
+                        , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number, IgnoreLists] {
+  console.log("'getHorizPushout': working with "+wallType+""+wallIndex+".");
+  console.log("'getHorizPushout': pushout total was "+oldTotalPushout+".");
+  console.log("'getHorizPushout': previous pushout was "+previousPushout+".");
+
+  let surfaceIgnoreList = ignoreLists[0];
+  const cornerIgnoreList = ignoreLists[1];
 
   const wallRight  = extremePoint(wall, "r");
   const wallLeft   = extremePoint(wall, "l");
@@ -374,12 +380,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
       pushout = pushoutClamp(intercept.x - ecbp[pt].x, wallType);
       if (Math.abs(totalPushout) > Math.abs(pushout)) {
-        //console.log("'getHorizPushout': cur = fwd, ecb = fwd, directly pushing out with total.");
-        return [totalPushout, null];
+        console.log("'getHorizPushout': cur = fwd, ecb = fwd, directly pushing out with total.");
+        return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
       }
       else {
-        //console.log("'getHorizPushout': cur = fwd, ecb = fwd, directly pushing out.");
-        return [pushout, pt];
+        console.log("'getHorizPushout': cur = fwd, ecb = fwd, directly pushing out.");
+        return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
       }
     }
     else {
@@ -394,13 +400,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
           pushout = pushoutClamp(pushout, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
-            //console.log("'getHorizPushout': cur = fwd, ecb = same, nxt = null, directly pushing out with total.");
-            return [totalPushout, null];
+            console.log("'getHorizPushout': cur = fwd, ecb = same, nxt = null, directly pushing out with total.");
+            return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
           }
           else {
             angularParameter = getAngularParameter(t, same, pt);
-            //console.log("'getHorizPushout': cur = wdf, ecb = same, nxt = null, directly pushing out.");
-            return [pushout, angularParameter];
+            console.log("'getHorizPushout': cur = wdf, ecb = same, nxt = null, directly pushing out.");
+            return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
           }
         }
         else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
@@ -409,13 +415,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
           pushout = pushoutClamp(pushout, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
-            //console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = null, directly pushing out with total.");
-            return [totalPushout, null];
+            console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = null, directly pushing out with total.");
+            return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
           }
           else {
             angularParameter = getAngularParameter(t, same, bPt);
-            //console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = null, directly pushing out.");
-            return [pushout, angularParameter];
+            console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = null, directly pushing out.");
+            return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
           }
         }
         else {
@@ -423,9 +429,9 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = null, doing physics and pushing out.");
+          console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = null, doing physics and pushing out.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
-          return [totalPushout, null];
+          return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
         }
       }
       else {
@@ -439,12 +445,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
         }
         else if (nextPt === same) {
@@ -457,13 +464,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
             pushout = pushoutClamp(pushout, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
-              //console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = same, directly pushing out with total.");
-              return [totalPushout, null];
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = same, directly pushing out with total.");
+              return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
             }
             else {
               angularParameter = getAngularParameter(t, same, pt);
-              //console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = same, directly pushing out.");
-              return [pushout, angularParameter];
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = same, directly pushing out.");
+              return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
             }
           }
           else {
@@ -471,12 +478,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
             pushout = wallForward.x - intercept.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-            //console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = same, doing physics and deferring.");
+            console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = same, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
                                   , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
                                   , stage, connectednessFunction);
           }
         }
@@ -490,13 +498,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             [pushout, t] = putEdgeOnCorner(ecbp[same], ecbp[pt], wallForward, wallType);
             pushout = pushoutClamp(pushout, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
-              //console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = bwd, directly pushing out with total.");
-              return [totalPushout, null];
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = bwd, directly pushing out with total.");
+              return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
             }
             else {
               angularParameter = getAngularParameter(t, same, pt);
-              //console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = bwd, directly pushing out.");
-              return [pushout, angularParameter];
+              console.log("'getHorizPushout': cur = fwd, ecb = same-fwd, nxt = bwd, directly pushing out.");
+              return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
             }
           }
           else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
@@ -505,13 +513,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
             pushout = pushoutClamp(pushout, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
-              //console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = bwd, directly pushing out with total.");
-              return [totalPushout, null];
+              console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = bwd, directly pushing out with total.");
+              return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
             }
             else {
               angularParameter = getAngularParameter(t, same, pt);
-              //console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = bwd, directly pushing out.");
-              return [pushout, angularParameter];
+              console.log("'getHorizPushout': cur = fwd, ecb = bwd-same, nxt = bwd, directly pushing out.");
+              return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
             }
           }
           else {
@@ -519,12 +527,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-            //console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
+            console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
           }
         }
@@ -544,12 +553,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
         pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
         if (Math.abs(totalPushout) > Math.abs(pushout)) {
-          //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, directly pushing out with total.");
-          return [totalPushout, null];
+          console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, directly pushing out with total.");
+          return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
         }
         else {
-          //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, directly pushing out.");
-          return [pushout, pt];
+          console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, directly pushing out.");
+          return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
         }
       }
       else {
@@ -557,9 +566,9 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
         pushout = wallForward.x - intercept.x;
         totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-        //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, doing physics and pushing out.");
+        console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = null, doing physics and pushing out.");
         surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
-        return [totalPushout, null];
+        return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
       }
     }
     else {
@@ -585,24 +594,25 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
           pushout = pushoutClamp( intercept.x - ecbp[pt].x, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
-            //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, directly pushing out with total.");
-            return [totalPushout, null];
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, directly pushing out with total.");
+            return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
           }
           else {
-            //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, directly pushing out.");
-            return [pushout, pt];
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, directly pushing out.");
+            return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
           }
         }
         else {
           intercept = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
         }
       }
@@ -624,12 +634,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
             pushout = pushoutClamp( intercept2.x - ecbp[pt].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
-              //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out with total.");
-              return [totalPushout, null];
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out with total.");
+              return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
             }
             else {
-              //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out.");
-              return [pushout, pt];
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, directly pushing out.");
+              return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
             }
           }
           else {
@@ -639,12 +649,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept2.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-            //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, doing physics and deferring.");
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
                                   , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
                                   , stage, connectednessFunction);
           }
         }
@@ -653,12 +664,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[same], ecbp[same]]);
           pushout = intercept.x - intercept2.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = bwd, ecb = same, nxt = same, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = bwd, ecb = same, nxt = same, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
         }
 
@@ -681,12 +693,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept(wall, hLineThrough(ecbp[pt]));
             pushout = pushoutClamp( intercept2.x - ecbp[pt].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
-              //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out with total.");
-              return [totalPushout, null];
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out with total.");
+              return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
             }
             else {
-              //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out");
-              return [pushout, pt];
+              console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, directly pushing out");
+              return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
             }
           }
           else {
@@ -696,12 +708,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[bPt], ecbp[bPt]]);
             pushout = wallForward.x - intercept2.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-            //console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, doing physics and deferring.");
+            console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
                                   , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
                                   , stage, connectednessFunction);
           }
         }
@@ -710,12 +723,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[fPt], ecbp[fPt]]);
           pushout = intercept.x - intercept2.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = bwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = bwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
         }
       }
@@ -734,12 +748,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
         pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
         if (Math.abs(totalPushout) > Math.abs(pushout)) {
-          //console.log("'getHorizPushout': cur = same, ecb = same, nxt = null, directly pushing out with total.");
-          return [totalPushout, null];
+          console.log("'getHorizPushout': cur = same, ecb = same, nxt = null, directly pushing out with total.");
+          return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
         }
         else {
-          //console.log("'getHorizPushout': cur = same, ecb = same, nxt = null, directly pushing out.");
-          return [pushout, pt];
+          console.log("'getHorizPushout': cur = same, ecb = same, nxt = null, directly pushing out.");
+          return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
         }
       }
       else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
@@ -748,13 +762,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
         pushout = pushoutClamp(pushout, wallType);
         if (Math.abs(totalPushout) > Math.abs(pushout)) {
-          //console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, directly pushing out with total.");
-          return [totalPushout, null];
+          console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, directly pushing out with total.");
+          return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
         }
         else {
           angularParameter = getAngularParameter(t, same, bPt);
-          //console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, directly pushing out.");
-          return [pushout, angularParameter];
+          console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, directly pushing out.");
+          return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
         }
       }
       else {
@@ -762,9 +776,9 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
         pushout = wallForward.x - intercept.x;
         totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-        //console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, doing physics and pushing out.");
+        console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, doing physics and pushing out.");
         surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
-        return [totalPushout, null];
+        return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
       }
     }
     else {
@@ -797,12 +811,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( wall, hLineThrough(ecbp[same]));
             pushout = pushoutClamp(intercept2.x - ecbp[same].x, wallType);
             if (Math.abs(totalPushout) > Math.abs(pushout)) {
-              //console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, directly pushing out with total.");
-              return [totalPushout, null];
+              console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, directly pushing out with total.");
+              return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
             }
             else {
-              //console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, directly pushing out.");
-              return [pushout, pt];
+              console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, directly pushing out.");
+              return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
             }
           }
           else {
@@ -812,12 +826,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             intercept2 = coordinateIntercept( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
             pushout = wallForward.x - intercept2.x;
             totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-            //console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, doing physics and deferring.");
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             return getHorizPushout( ecb1, ecbp, same
                                   , nextWall, wallType, nextWallTypeAndIndex[1]
                                   , totalPushout, pushout
                                   , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
                                   , stage, connectednessFunction);
           }
         }
@@ -826,12 +841,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept2 = coordinateIntercept( hLineThrough(intercept), [ecb1[fPt], ecbp[fPt]]);
           pushout = intercept.x - intercept2.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = same, ecb = fwd, nxt = fwd, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = same, ecb = fwd, nxt = fwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);     
         }
       }
@@ -844,12 +860,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
           pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
-            //console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, directly pushing out with total.");
-            return [totalPushout, null];
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, directly pushing out with total.");
+            return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
           }
           else {
-            //console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, directly pushing out.");
-            return [pushout, pt];
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, directly pushing out.");
+            return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
           }
         }
         else {
@@ -857,12 +873,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept ( hLineThrough(wallForward), [ecb1[same], ecbp[same]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
         }
       }
@@ -875,12 +892,12 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( wall, hLineThrough(ecbp[same]));
           pushout = pushoutClamp(intercept.x - ecbp[same].x, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
-            //console.log("'getHorizPushout': cur = same, ecb = same, nxt = bwd, directly pushing out with total.");
-            return [totalPushout, null];
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = bwd, directly pushing out with total.");
+            return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
           }
           else {
-            //console.log("'getHorizPushout': cur = same, ecb = same, nxt = bwd, directly pushing out.");
-            return [pushout, pt];
+            console.log("'getHorizPushout': cur = same, ecb = same, nxt = bwd, directly pushing out.");
+            return [pushout, pt, [surfaceIgnoreList, cornerIgnoreList]];
           }
         }
         else if (UDSign * ecbp[bPt].y <= UDSign * wallForward.y) {
@@ -889,13 +906,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           [pushout, t] = putEdgeOnCorner( ecbp[same], ecbp[bPt], wallForward, wallType);
           pushout = pushoutClamp(pushout, wallType);
           if (Math.abs(totalPushout) > Math.abs(pushout)) {
-            //console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = bwd, directly pushing out with total.");
-            return [totalPushout, null];
+            console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = bwd, directly pushing out with total.");
+            return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
           }
           else {
             angularParameter = getAngularParameter(t, same, bPt);
-            //console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = bwd, directly pushing out.");
-            return [pushout, angularParameter];
+            console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = bwd, directly pushing out.");
+            return [pushout, angularParameter, [surfaceIgnoreList, cornerIgnoreList]];
           }
         }
         else {
@@ -903,12 +920,13 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
-          //console.log("'getHorizPushout': cur = same, ecb = bwd, nxt = bwd, doing physics and deferring.");
+          console.log("'getHorizPushout': cur = same, ecb = bwd, nxt = bwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           return getHorizPushout( ecb1, ecbp, same
                                 , nextWall, wallType, nextWallTypeAndIndex[1]
                                 , totalPushout, pushout
                                 , situation
+                                , [surfaceIgnoreList, cornerIgnoreList]
                                 , stage, connectednessFunction);
         }
       }
@@ -964,8 +982,8 @@ function getAngularParameter ( t : number, same : number, other : number) {
 };
 
 
-// touching data is null, or: new position, maybe wall type and index, sweeping parameter, angular parameter
-type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], number, null | number];
+// touching data is null, or: new position, maybe wall type and index, sweeping parameter, angular parameter, ignore lists
+type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], number, null | number, IgnoreLists];
 
 // ecbp : projected ECB
 // ecb1 : old ECB
@@ -978,7 +996,8 @@ type MaybeCenterAndTouchingDataType = null | [Vec2D, null | [string, number], nu
 function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                        , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                        , ignoringPushouts : string
-                       , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [string, Vec2D, number, number | null] {
+                       , ignoreLists : IgnoreLists
+                       , stage : Stage, connectednessFunction : ConnectednessFunction) : null | [ string, Vec2D, number, number | null, IgnoreLists ] {
 
 // STANDING ASSUMPTIONS
 // the ECB can only collide a ground/platform surface on its bottom point (or a bottom edge on a corner of the ground/platform)
@@ -1001,6 +1020,9 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
   }
   // cannot immediately return null for horizontal surfaces when vertical pushouts are ignored, because of ECB edge colliding on corners of surfaces
   // this will be tackled later
+
+  // start keeping track of additional ignored surfaces this round
+  let [surfaceIgnoreList, cornerIgnoreList] = ignoreLists;
 
   // start defining useful constants/variables
 
@@ -1078,7 +1100,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
     // if the surface is a platform, and the bottom ECB point is below the platform, we shouldn't do anything
     if ( isPlatform ) {
       if ( !isOutside ( ecb1[same], wallTopOrRight, wallBottomOrLeft, wallType )) {
-        //console.log("'findCollision': no collision, bottom ECB1 point was below p"+wallIndex+".");
+        console.log("'findCollision': no collision, bottom ECB1 point was below p"+wallIndex+".");
         return null;
       }
     }
@@ -1095,6 +1117,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
     let edgePushout  = null; // null for now
     let closestEdgeCollision = null;
     let corner : null | Vec2D = null;
+    let otherCorner : null | Vec2D = null;
 
     let edgeSweepResult = null;
     let otherEdgeSweepResult = null;
@@ -1121,7 +1144,9 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
         }
       }
 
-      if (corner !== null && !cornerIsIgnored(corner, surfaceIgnoreList, stage)) {
+      if (corner !== null && !cornerIsIgnoredInSurfaces(corner, surfaceIgnoreList, stage)
+                          && !cornerIsIgnored(corner, cornerIgnoreList)
+         ) {
         // the relevant ECB edge, that might collide with the corner, is the edge between ECB points 'same' and 'other'
         let interiorECBside = "l";
         if (counterclockwise === false) {
@@ -1129,14 +1154,14 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
         }
 
         if (!isOutside (corner, ecbp[same], ecbp[other], interiorECBside) && isOutside (corner, ecb1[same], ecb1[other], interiorECBside) ) {
-          edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, position, counterclockwise, corner, wallType);
+          edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, position, counterclockwise, ignoreLists, corner, wallType);
         }
       }
 
       if (checkTopInstead) {
         // unless we are dealing with a wall where the ECB can collided on the topmost point, in whih case 'same' and 'top' are relevant
         let otherCounterclockwise = false; // whether ( same ECB point -> top ECB point) is counterclockwise
-        let otherCorner = wallRight;
+        otherCorner = wallRight;
         if (wallType === "l") {
           otherCounterclockwise = true;
           otherCorner = wallLeft;
@@ -1149,8 +1174,10 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
 
         if (    !isOutside(otherCorner, ecbp[same], ecbp[2], otherInteriorECBside) 
              &&  isOutside(otherCorner, ecb1[same], ecb1[2], otherInteriorECBside)
-             && !cornerIsIgnored(otherCorner, surfaceIgnoreList, stage) ) {
-          otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise, otherCorner, wallType);
+             && !cornerIsIgnoredInSurfaces(otherCorner, surfaceIgnoreList, stage) 
+             && !cornerIsIgnored(otherCorner, cornerIgnoreList)
+           ) {
+          otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise, ignoreLists, otherCorner, wallType);
         }
       }
 
@@ -1180,6 +1207,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
                              , new Vec2D (position.x + edgePushout[1], position.y) // no need to add an additional pushout, already included
                              , edgePushout[2]
                              , edgePushout[3] 
+                             , edgePushout[4]
                              ];
     }
     
@@ -1190,7 +1218,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
     // -------------------------------------------------------------------------------------------------------------------------------------------------------
     // ECB vertex collision checking
 
-    let closestPointCollision : null | [string, Vec2D, number, number | null] = null;
+    let closestPointCollision : null | [string, Vec2D, number, number | null, IgnoreLists] = null;
 
     // ignore point collision if told to
     // we already tackled this if ignoringPushouts is "all" or "vert",
@@ -1216,21 +1244,23 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
             if (position.y < prevPosition.y) {
               situation = "d";
             }
-            // the following function updates the surface ignore list
-            const [ pushout
-                  , maybeAngularParameter ] = getHorizPushout( ecb1, ecbp, same
-                                                             , wall, wallType, wallIndex
-                                                             , 0, 0
-                                                             , situation
-                                                             , stage, connectednessFunction );
-            // debug: remove below
-            //surfaceIgnoreList = [];
-            // debug: remove above
-            //console.log("'findCollision': horizontal pushout value is "+pushout+".");
+            let pushout = 0;
+            let maybeAngularParameter = null;
+            [ pushout
+            , maybeAngularParameter
+            , [surfaceIgnoreList, cornerIgnoreList] 
+            ] = getHorizPushout( ecb1, ecbp, same
+                               , wall, wallType, wallIndex
+                               , 0, 0
+                               , situation
+                               , [surfaceIgnoreList, cornerIgnoreList]
+                               , stage, connectednessFunction );
+
+            console.log("'findCollision': horizontal pushout value is "+pushout+".");
             // don't count a collision if no pushout occurred
             if (pushout !== 0) {
               const newPointPosition = new Vec2D ( position.x + pushout + additionalPushout, position.y);
-              closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter];
+              closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter, [surfaceIgnoreList, cornerIgnoreList]];
               // if same-side ECB point is no longer within wall bounds, return a "none" type collision instead
               if (ecbp[same].y > wallTop.y || ecbp[same].y < wallBottom.y) {
                 closestPointCollision[0] = "n";
@@ -1243,7 +1273,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
           // need to add an additional pushout, not included in horizontal pushout function
           const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
                                             , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
-          closestPointCollision = [wallType, newPointPosition, s, same];
+          closestPointCollision = [wallType, newPointPosition, s, same, [surfaceIgnoreList, cornerIgnoreList]];
         }
       }
 
@@ -1276,12 +1306,15 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
       finalCollisionType = "edge";
     }
 
+    /*
     if (finalCollision === null) {
-      //console.log("'findCollision': sweeping determined no collision with "+wallType+""+wallIndex+".");
+      console.log("'findCollision': sweeping determined no collision with "+wallType+""+wallIndex+".");
     }
     else {
-      //console.log("'findCollision': "+finalCollisionType+" collision with "+wallType+""+wallIndex+" and sweeping parameter s="+finalCollision[2]+".");
+      console.log("'findCollision': "+finalCollisionType+" collision with "+wallType+""+wallIndex+" and sweeping parameter s="+finalCollision[2]+".");
     }
+    */
+
     return finalCollision;
 
   }
@@ -1294,6 +1327,7 @@ type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                              , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
                              , ignoringPushouts : string
+                             , ignoreLists : IgnoreLists
                              , stage : Stage, connectednessFunction : ConnectednessFunction ) : MaybeCenterAndTouchingDataType {
   const suggestedMaybeCenterAndTouchingData : Array<MaybeCenterAndTouchingDataType> = [null]; // initialise list of new collisions
   const collisionData = wallAndThenWallTypeAndIndexs.map( 
@@ -1302,15 +1336,18 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
                                                             , wallAndThenWallTypeAndIndex[0]
                                                             , wallAndThenWallTypeAndIndex[1][0], wallAndThenWallTypeAndIndex[1][1]
                                                             , ignoringPushouts
+                                                            , ignoreLists
                                                             , stage, connectednessFunction )
                                             , wallAndThenWallTypeAndIndex[1] ]);
 
   for (let i = 0; i < collisionData.length; i++) {
     if (collisionData[i][0] !== null) {
+
       suggestedMaybeCenterAndTouchingData.push( [ collisionData[i][0][1]
                                                 , [collisionData[i][0][0], collisionData[i][1][1]]
                                                 , collisionData[i][0][2]
                                                 , collisionData[i][0][3] 
+                                                , collisionData[i][0][4]
                                                 ]);
     }
   }
@@ -1321,27 +1358,44 @@ function findClosestCollision( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPos
 function reinflateECB ( ecb : ECB, position : Vec2D
                       , touchingData : null | [string, number, number | null]
                       , relevantSurfaces : Array<LabelledSurface>
-                      , oldecbSquashData : null | [Vec2D, number]
+                      , oldecbSquashData : null | [null | number, number]
                       , stage : Stage
                       , connectednessFunction : ConnectednessFunction
-                      ) : [Vec2D, null | [string, number], null | [Vec2D, number]] {
-  
+                      ) : [Vec2D, null | [string, number], null | [null | number, number]] {
+
+  console.log("'reinflateECB': oldSquashData is "+(oldecbSquashData===null?"null":(oldecbSquashData[0]===null?"null":oldecbSquashData[0])+" "+oldecbSquashData[1])+".");
   if (oldecbSquashData !== null) {
     const q = 1 / oldecbSquashData[1];
-    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*position.x , q*ecb[0].y + (1-q)*position.y )
-                        , new Vec2D ( q*ecb[1].x + (1-q)*position.x , q*ecb[1].y + (1-q)*position.y )
-                        , new Vec2D ( q*ecb[2].x + (1-q)*position.x , q*ecb[2].y + (1-q)*position.y )
-                        , new Vec2D ( q*ecb[3].x + (1-q)*position.x , q*ecb[3].y + (1-q)*position.y )
+    const focus = ecbFocusFromAngularParameter(ecb, oldecbSquashData[0]);
+    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
+                        , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
+                        , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
+                        , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
                         ];
+    console.log("'reinflateECB': ecb[0]=("+ecb[0].x+","+ecb[0].y+").");
+    console.log("'reinflateECB': ecb[1]=("+ecb[1].x+","+ecb[1].y+").");
+    console.log("'reinflateECB': ecb[2]=("+ecb[2].x+","+ecb[2].y+").");
+    console.log("'reinflateECB': ecb[3]=("+ecb[3].x+","+ecb[3].y+").");
+    console.log("'reinflateECB': fullsizeecb[0]=("+fullsizeecb[0].x+","+fullsizeecb[0].y+").");
+    console.log("'reinflateECB': fullsizeecb[1]=("+fullsizeecb[1].x+","+fullsizeecb[1].y+").");
+    console.log("'reinflateECB': fullsizeecb[2]=("+fullsizeecb[2].x+","+fullsizeecb[2].y+").");
+    console.log("'reinflateECB': fullsizeecb[3]=("+fullsizeecb[3].x+","+fullsizeecb[3].y+").");
+
     const ecbSquashData = inflateECB (fullsizeecb, null, relevantSurfaces, stage, connectednessFunction);
+    console.log("'reinflateECB': squashFactor is "+(ecbSquashData===null?"null":ecbSquashData[1])+".");
     if (ecbSquashData !== null) {
       const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
       const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
                                    , position.y ); // + squashedecb[0].y - ecb[0].y);
       return [newPosition, touchingData, ecbSquashData];
     }
+    else {
+      return [position, touchingData, null];
+    }
   }
-  return [position, touchingData, null];
+  else {
+    return [position, touchingData, null];
+  }
 };
 
 
@@ -1351,14 +1405,15 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                           , relevantHorizSurfaces : Array<LabelledSurface>
                           , relevantVertSurfaces : Array<LabelledSurface>
                           , ignoringPushouts : string
+                          , ignoreLists : [IgnoreList, Array<Vec2D>]
                           , stage : Stage
                           , connectednessFunction : ConnectednessFunction
                           , oldTouchingData : null | [string, number, number | null] // surface type, surface index, angular parameter
-                          , oldecbSquashData : null | [Vec2D, number]
+                          , oldecbSquashData : null | [null | number, number]
                           , passNumber : number
                           ) : [ Vec2D // new position
                               , null | [string, number] // collision surface type and index
-                              , null | [Vec2D, number] // ECB scaling data
+                              , null | [null | number, number] // ECB scaling data
                               ] {
 
   let touchingData = oldTouchingData;
@@ -1385,7 +1440,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
 
   if (passNumber > maximumCollisionDetectionPasses || ignoringPushouts === "all") {
     // try to re-inflate the ECB, and end
-    //console.log("'collisionRoutine': ending collision routine prematurely.");
+    console.log("'collisionRoutine': ending collision routine prematurely after pass number "+passNumber+".");
     return reinflateECB( ecbp, position, touchingData
                        , allRelevantSurfaces
                        , ecbSquashData
@@ -1394,15 +1449,16 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                        );    
   }
   else {
-    //console.log("'collisionRoutine': pass number "+passNumber+".");
+    console.log("'collisionRoutine': pass number "+passNumber+".");
     // first, find the closest collision
     const closestCollision = findClosestCollision( ecbp, ecb1, position, prevPosition
                                                  , currentRelevantSurfaces
                                                  , newIgnoringPushouts
+                                                 , ignoreLists
                                                  , stage, connectednessFunction);
     if (closestCollision === null) {
       // if no collision occured, try to re-inflate the ECB, and end
-      //console.log("'collisionRoutine': no collision detected on this pass.");      
+      console.log("'collisionRoutine': no collision detected on this pass.");      
       return reinflateECB( ecbp, position, touchingData
                          , allRelevantSurfaces
                          , ecbSquashData
@@ -1415,6 +1471,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       let newPosition = closestCollision[0];
       const surfaceTypeAndIndex = closestCollision[1];
       const angularParameter = closestCollision[3];
+      const newIgnoreLists = closestCollision[4];
       const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
       const newecbp = moveECB (ecbp, vec);
       let squashedecbp = newecbp;
@@ -1424,11 +1481,12 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
            || (pushoutSigns[0] === "-" && vec.x > 0)
          ) { // horizontal pushout conflict
 
-        //console.log("'collisionRoutine': horizontal pushout conflict.");
+        console.log("'collisionRoutine': horizontal pushout conflict.");
 
         if (touchingData !== null) { // should be impossible for touchingData to be null at this point
           console.log("'collisionRoutine': giving touchingData[2]="+(touchingData[2]===null?"null":touchingData[2])+" to 'inflateECB'.");
-          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);          
+          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
+          console.log("'collisionRoutine': ecbSquashData[1]="+(ecbSquashData===null?"null":ecbSquashData[1])+".");    
           if (ecbSquashData !== null) {
             ecbSquashData[1] *= oldSquashFactor;
             squashedecbp = squashECBAt(newecbp, ecbSquashData);
@@ -1449,6 +1507,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
                                , newIgnoringPushouts
+                               , newIgnoreLists
                                , stage, connectednessFunction
                                , touchingData, ecbSquashData, passNumber+1);
       }
@@ -1457,7 +1516,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                 || (pushoutSigns[1] === "-" && vec.y > 0)
               ) { // vertical pushout conflict
 
-        //console.log("'collisionRoutine': vertical pushout conflict.");
+        console.log("'collisionRoutine': vertical pushout conflict.");
 
         if (touchingData !== null) { // should be impossible for touchingData to be null at this point
           ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);          
@@ -1481,6 +1540,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
                                , newIgnoringPushouts
+                               , newIgnoreLists
                                , stage, connectednessFunction
                                , touchingData, ecbSquashData, passNumber+1);
       }
@@ -1512,6 +1572,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                              , relevantHorizSurfaces
                              , relevantVertSurfaces
                              , newIgnoringPushouts
+                             , newIgnoreLists
                              , stage, connectednessFunction
                              , touchingData, ecbSquashData, passNumber+1);
     }
@@ -1538,29 +1599,13 @@ export function groundedECBSquashFactor( ecbTop : Vec2D, ecbBottom : Vec2D, ceil
   }
 };
 
-
 // finds the ECB squash factor by inflating the ECB from the point on the ECB given by the angular parameter t
 // if angular parameter is null, instead inflates the ECB from its center
 function inflateECB ( ecb : ECB, t : null | number
                     , relevantSurfaces : Array<LabelledSurface>
                     , stage : Stage
-                    , connectednessFunction : ConnectednessFunction) : null | [Vec2D, number] {
-  let focus = null;
-  if (t === null) {
-    focus = new Vec2D( ecb[0].x, (ecb[0].y + ecb[2].y)/2 );
-  }
-  else if (t <= 1) {
-    focus = new Vec2D ( (1 - t    )*ecb[0].x + t    *ecb[1].x, (1 - t    )*ecb[0].y + t    *ecb[1].y );
-  }
-  else if (t <= 2) {
-    focus = new Vec2D ( (1 - (t-1))*ecb[1].x + (t-1)*ecb[2].x, (1 - (t-1))*ecb[1].y + (t-1)*ecb[2].y );
-  }
-  else if (t <= 3) {
-    focus = new Vec2D ( (1 - (t-2))*ecb[2].x + (t-2)*ecb[3].x, (1 - (t-2))*ecb[2].y + (t-2)*ecb[3].y );
-  }
-  else {
-    focus = new Vec2D ( (1 - (t-3))*ecb[3].x + (t-3)*ecb[0].x, (1 - (t-3))*ecb[3].y + (t-3)*ecb[0].y );
-  }
+                    , connectednessFunction : ConnectednessFunction) : null | [null | number, number] {
+  const focus = ecbFocusFromAngularParameter(ecb, t);
   const offset = additionalOffset/10;
   const pointlikeECB : ECB = [ new Vec2D ( focus.x         , focus.y - offset ) 
                              , new Vec2D ( focus.x + offset, focus.y          )
@@ -1571,16 +1616,16 @@ function inflateECB ( ecb : ECB, t : null | number
   console.log("'inflateECB': parameter t="+(t===null?"null":t)+".");
   console.log("'inflateECB': focus for this parameter at ("+focus.x+","+focus.y+").");
 
-
   const closestCollision = findClosestCollision( ecb, pointlikeECB, focus, focus
                                                , relevantSurfaces
-                                               , "no" // don't ignore any surfaces for this calculation
+                                               , "no" // don't ignore any pushouts for this calculation
+                                               , [[],[]] // empty ignore lists
                                                , stage, connectednessFunction );
   if (closestCollision === null) {
     return null;
   }
   else {
-    return [focus, Math.max(offset, closestCollision[2] - offset)]; // ECB contact location, sweeping parameter
+    return [t, Math.max(offset, closestCollision[2] - offset)]; // ECB angular parameter, sweeping parameter
   }
 }
 
@@ -1635,15 +1680,14 @@ function closestCenterAndTouchingType(maybeCenterAndTouchingTypes : Array<MaybeC
 
 // this function initialises necessary data and then calls the main collision routine loop
 export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
-                                   , ecbSquashData : null | [Vec2D, number]
+                                   , ecbSquashData : null | [null | number, number]
                                    , horizIgnore : string
                                    , stage : Stage
                                    , connectednessFunction : ConnectednessFunction
                                    ) : [ Vec2D // new position
                                        , null | [string, number] // collision surface type and index
-                                       , null | [Vec2D, number] // ECB scaling data
+                                       , null | [null | number, number] // ECB scaling data
                                        ] {
-  surfaceIgnoreList = [];
   pushoutSigns[0] = null;
   pushoutSigns[1] = null;
 
@@ -1679,6 +1723,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
                          , relevantHorizSurfaces
                          , relevantVertSurfaces
                          , "no" // start off not ignoring any pushouts
+                         , [[],[]] // start off with empty ignore lists
                          , stage, connectednessFunction
                          , null // start off not touching anything
                          , ecbSquashData

@@ -546,10 +546,10 @@ function lCancelUpdate ( i:number, input : any ) : void {
 };
 
 
-const ecbSquashData : [ null | [Vec2D, number]
-                      , null | [Vec2D, number]
-                      , null | [Vec2D, number]
-                      , null | [Vec2D, number] 
+const ecbSquashData : [ null | [null | number, number]
+                      , null | [null | number, number]
+                      , null | [null | number, number]
+                      , null | [null | number, number] 
                       ] = [null, null, null, null];
 
 
@@ -666,10 +666,10 @@ function findAndResolveCollisions ( i : number, input : any
                                                       , new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y ) // bottom non-squashed ECBp point, no offset as grounded
                                                       , toList(activeStage.ceiling));
     if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
-      ecbSquashData[i] = [player[i].phys.pos, groundSquashFactor];
+      ecbSquashData[i] = [0, groundSquashFactor];
     }
     if (ecbSquashData[i] !== null) {
-      ecbSquashData[i][0] = player[i].phys.pos; // always squash from the bottom ECB point if player is grounded
+      ecbSquashData[i][0] = 0; // always squash from the bottom ECB point if player is grounded
     }
   }
 

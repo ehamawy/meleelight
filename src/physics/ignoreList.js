@@ -7,13 +7,14 @@ import {Vec2D} from "../main/util/Vec2D";
 import type {Stage} from "../stages/stage";
 
 
-export type ignoreList = Array<[string, number]>;
+export type IgnoreList = Array<[string, number]>;
+export type IgnoreLists = [IgnoreList, Array<Vec2D>];
 
-export function addToIgnoreList(surfaceIgnoreList : ignoreList, label : [string, number]) : ignoreList {
+export function addToIgnoreList(surfaceIgnoreList : IgnoreList, label : [string, number]) : IgnoreList {
   return surfaceIgnoreList.concat([label]);
 };
 
-export function isIgnored ( label : [string, number], surfaceIgnoreList : ignoreList) : bool {
+export function isIgnored ( label : [string, number], surfaceIgnoreList : IgnoreList) : bool {
   if (surfaceIgnoreList.length < 1) {
     return false;
   }
@@ -29,7 +30,7 @@ export function isIgnored ( label : [string, number], surfaceIgnoreList : ignore
 };
 
 // total hack for the moment
-export function cornerIsIgnored( corner : Vec2D , surfaceIgnoreList : ignoreList, stage : Stage) : bool {
+export function cornerIsIgnoredInSurfaces ( corner : Vec2D , surfaceIgnoreList : IgnoreList, stage : Stage) : bool {
   if (surfaceIgnoreList.length < 1) {
     return false;
   }
@@ -41,8 +42,23 @@ export function cornerIsIgnored( corner : Vec2D , surfaceIgnoreList : ignoreList
       return true;
     }
     else {
-      return cornerIsIgnored(corner, tail, stage);
+      return cornerIsIgnoredInSurfaces(corner, tail, stage);
     }
-
   }
 }
+
+export function cornerIsIgnored ( corner: Vec2D, cornerIgnoreList : Array<Vec2D> ) : bool {
+  if (cornerIgnoreList.length < 1) {
+    return false;
+  }
+  else {
+    const [head, ...tail] = cornerIgnoreList;
+    if (Math.abs(corner.x - head.x) < 0.0001 && Math.abs(corner.y - head.y) < 0.0001) {
+      return true;
+    }
+    else {
+      return cornerIsIgnored(corner, tail);
+    }
+  }
+}
+
