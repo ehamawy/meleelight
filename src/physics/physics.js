@@ -1,6 +1,5 @@
 //@flow
 
-
 import {player, characterSelections, percentShake, playerType, edgeOffset, versusMode, showDebug, gameMode} from "../main/main";
 import {framesData, ecb} from "../main/characters";
 import {sounds} from "../main/sfx";
@@ -609,8 +608,8 @@ function findAndResolveCollisions ( i : number, input : any
     horizIgnore = notIgnoringPlatforms? "none" : "platforms";
   }
 
-  // type : [ Vec2D       , null | [string, number], null | [Vec2D, number] ]
-  //        [ new position, collision label        , ECB squash data        ]
+  // type : [ Vec2D       , null | [string, number], null | [Vec2D, number], ECB ]
+  //        [ new position, collision label        , ECB squash data       , final ECBp position ]
   const collisionData = runCollisionRoutine ( player[i].phys.ECBp
                                             , player[i].phys.ECB1
                                             , player[i].phys.pos
@@ -657,8 +656,9 @@ function findAndResolveCollisions ( i : number, input : any
         console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform/corner/none");
         break;
     }
-
   }
+
+  player[i].phys.ECB1 = collisionData[3];
 
   // finally, calculate how much squashing is required by the ground
   if (player[i].phys.grounded) {
@@ -672,6 +672,8 @@ function findAndResolveCollisions ( i : number, input : any
       ecbSquashData[i][0] = 0; // always squash from the bottom ECB point if player is grounded
     }
   }
+
+  
 
   return [stillGrounded, backward, notTouchingWalls];
 };
@@ -993,11 +995,26 @@ export function physics (i : number, input : any) : void {
       }
     }
 
-    if (player[i].phys.shielding === false) {
-      player[i].phys.shieldHP += 0.07;
-      if (player[i].phys.shieldHP > 60) {
-        player[i].phys.shieldHP = 60;
-      }
+    
+  }
+
+  else { // player ignoring collisions
+    player[i].phys.ECB1 = [
+      new Vec2D( player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] ),
+      new Vec2D( player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] ),
+      new Vec2D( player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] ),
+      new Vec2D( player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
+    ];
+  }
+
+  if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
+    player[i].phys.ECB1[0].y = player[i].phys.pos.y;
+  }
+
+  if (player[i].phys.shielding === false) {
+    player[i].phys.shieldHP += 0.07;
+    if (player[i].phys.shieldHP > 60) {
+      player[i].phys.shieldHP = 60;
     }
   }
 
@@ -1016,24 +1033,6 @@ export function physics (i : number, input : any) : void {
       player[i].phys.pos.y
     ]
   );
-  
- 
-  player[i].phys.ECB1 = [
-    new Vec2D( player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] ),
-    new Vec2D( player[i].phys.pos.x + ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] ),
-    new Vec2D( player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[3] ),
-    new Vec2D( player[i].phys.pos.x - ecbOffset[1], player[i].phys.pos.y + ecbOffset[2] )
-  ];
-
-  if (ecbSquashData[i] !== null) {
-    player[i].phys.ECB1 = squashECBAt(player[i].phys.ECB1, ecbSquashData[i]);
-  }
-
-
-  
-  if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
-    player[i].phys.ECB1[0].y = player[i].phys.pos.y;
-  }
 
   if (gameMode === 3 && player[i].phys.posPrev.y > -80 && player[i].phys.pos.y <= -80) {
     sounds.lowdown.play();

@@ -292,13 +292,12 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
       const xIntersect = coordinateIntercept( [ ecbp[same], ecbp[other] ], [ corner, new Vec2D( corner.x+1, corner.y ) ]).x;
       const pushout = corner.x - xIntersect ;
       const clampedPushout = corner.x - ecbp[cornerSide].x;
-      const angularParameter = getAngularParameter(t, same, other);
-      console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
+            console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
 
       if (sign*pushout > sign*clampedPushout) { // corner can't push out fully on its own, might need to defer to relevant wall
         if (maybeWallAndThenWallTypeAndIndex === null || (wallType !== "l" && wallType !== "r")) {
           // can't pass on to a relevant wall, directly push out
-          return ( ["x"+wallType, clampedPushout + sign*additionalOffset, s, angularParameter, [surfaceIgnoreList, cornerIgnoreList.concat(corner)]] );
+          return ( ["x"+wallType, clampedPushout + sign*additionalOffset, s, cornerSide, [surfaceIgnoreList, cornerIgnoreList.concat(corner)]] );
         }
         else {
           // defer to wall
@@ -316,11 +315,12 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
                                               , stage, connectednessFunction
                                               );
           const collisionType = horizPushout[1] === null ? ("x"+wallType) : wallType;
-          return ( [ collisionType, horizPushout[0], s, horizPushout[1], horizPushout[2] ] );
+          return ( [ collisionType, horizPushout[0] + sign*additionalOffset, s, horizPushout[1], horizPushout[2] ] );
         }
 
       }
       else {
+        const angularParameter = getAngularParameter((corner.x-ecbp[same].x)/(ecbp[other].x-ecbp[same].x), same, other);
         return ( ["x"+wallType, pushout + sign*additionalOffset, s, angularParameter, [surfaceIgnoreList, cornerIgnoreList]] );
       }
 
@@ -1396,40 +1396,30 @@ function reinflateECB ( ecb : ECB, position : Vec2D
                       , oldecbSquashData : null | [null | number, number]
                       , stage : Stage
                       , connectednessFunction : ConnectednessFunction
-                      ) : [Vec2D, null | [string, number], null | [null | number, number]] {
+                      ) : [Vec2D, null | [string, number], null | [null | number, number], ECB] {
 
-  console.log("'reinflateECB': oldSquashData is "+(oldecbSquashData===null?"null":(oldecbSquashData[0]===null?"null":oldecbSquashData[0])+" "+oldecbSquashData[1])+".");
+  let q = 1;
+  let squashCenter = null;
   if (oldecbSquashData !== null) {
-    const q = 1 / oldecbSquashData[1];
-    const focus = ecbFocusFromAngularParameter(ecb, oldecbSquashData[0]);
-    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
-                        , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
-                        , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
-                        , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
-                        ];
-    console.log("'reinflateECB': ecb[0]=("+ecb[0].x+","+ecb[0].y+").");
-    console.log("'reinflateECB': ecb[1]=("+ecb[1].x+","+ecb[1].y+").");
-    console.log("'reinflateECB': ecb[2]=("+ecb[2].x+","+ecb[2].y+").");
-    console.log("'reinflateECB': ecb[3]=("+ecb[3].x+","+ecb[3].y+").");
-    console.log("'reinflateECB': fullsizeecb[0]=("+fullsizeecb[0].x+","+fullsizeecb[0].y+").");
-    console.log("'reinflateECB': fullsizeecb[1]=("+fullsizeecb[1].x+","+fullsizeecb[1].y+").");
-    console.log("'reinflateECB': fullsizeecb[2]=("+fullsizeecb[2].x+","+fullsizeecb[2].y+").");
-    console.log("'reinflateECB': fullsizeecb[3]=("+fullsizeecb[3].x+","+fullsizeecb[3].y+").");
+    q = 1 / oldecbSquashData[1] + additionalOffset/5;
+    squashCenter = oldecbSquashData[0];
+  }
 
-    const ecbSquashData = inflateECB (fullsizeecb, null, relevantSurfaces, stage, connectednessFunction);
-    console.log("'reinflateECB': squashFactor is "+(ecbSquashData===null?"null":ecbSquashData[1])+".");
-    if (ecbSquashData !== null) {
-      const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
-      const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
-                                   , position.y ); // + squashedecb[0].y - ecb[0].y);
-      return [newPosition, touchingData, ecbSquashData];
-    }
-    else {
-      return [position, touchingData, null];
-    }
+  const focus = ecbFocusFromAngularParameter(ecb, squashCenter);
+  const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
+                      , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
+                      , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
+                      , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
+                      ];
+  const ecbSquashData = inflateECB (fullsizeecb, null, relevantSurfaces, stage, connectednessFunction);
+  if (ecbSquashData !== null) {
+    const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
+    const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
+                                 , position.y ); // + squashedecb[0].y - ecb[0].y);
+    return [newPosition, touchingData, ecbSquashData, squashedecb];
   }
   else {
-    return [position, touchingData, null];
+    return [position, touchingData, null, ecb];
   }
 };
 
@@ -1439,6 +1429,7 @@ function reinflateECB ( ecb : ECB, position : Vec2D
 function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition : Vec2D
                           , relevantHorizSurfaces : Array<LabelledSurface>
                           , relevantVertSurfaces : Array<LabelledSurface>
+                          , relevantSurfacesMinusPlatforms : Array<LabelledSurface>
                           , ignoringPushouts : string
                           , ignoreLists : [IgnoreList, Array<Vec2D>]
                           , stage : Stage
@@ -1449,6 +1440,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
                           ) : [ Vec2D // new position
                               , null | [string, number] // collision surface type and index
                               , null | [null | number, number] // ECB scaling data
+                              , ECB // final ECBp to become next frame ECB1
                               ] {
 
   let touchingData = oldTouchingData;
@@ -1477,11 +1469,11 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
     // try to re-inflate the ECB, and end
     console.log("'collisionRoutine': ending collision routine prematurely after pass number "+passNumber+".");
     return reinflateECB( ecbp, position, touchingData
-                       , allRelevantSurfaces
+                       , relevantSurfacesMinusPlatforms
                        , ecbSquashData
                        , stage
                        , connectednessFunction
-                       );    
+                       );
   }
   else {
     console.log("'collisionRoutine': pass number "+passNumber+".");
@@ -1495,7 +1487,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       // if no collision occured, try to re-inflate the ECB, and end
       console.log("'collisionRoutine': no collision detected on this pass.");      
       return reinflateECB( ecbp, position, touchingData
-                         , allRelevantSurfaces
+                         , relevantSurfacesMinusPlatforms
                          , ecbSquashData
                          , stage
                          , connectednessFunction
@@ -1508,8 +1500,8 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       const angularParameter = closestCollision[3];
       const newIgnoreLists = closestCollision[4];
       const vec = new Vec2D (newPosition.x - position.x, newPosition.y - position.y);
-      const newecbp = moveECB (ecbp, vec);
-      let squashedecbp = newecbp;
+      const newecbp = moveECB (ecbp, vec); // this only gets used if there is no pushout conflict
+      let squashedecbp = ecbp;
 
       // first, check for pushout conflicts
       if (    (pushoutSigns[0] === "+" && vec.x < 0)
@@ -1519,14 +1511,12 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
         console.log("'collisionRoutine': horizontal pushout conflict.");
 
         if (touchingData !== null) { // should be impossible for touchingData to be null at this point
-          console.log("'collisionRoutine': giving touchingData[2]="+(touchingData[2]===null?"null":touchingData[2])+" to 'inflateECB'.");
-          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);
-          console.log("'collisionRoutine': ecbSquashData[1]="+(ecbSquashData===null?"null":ecbSquashData[1])+".");    
+          ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);  
           if (ecbSquashData !== null) {
             ecbSquashData[1] *= oldSquashFactor;
-            squashedecbp = squashECBAt(newecbp, ecbSquashData);
-            newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - newecbp[0].x
-                                   , newPosition.y ); // + squashedecbp[0].y - newecbp[0].y);
+            squashedecbp = squashECBAt(ecbp, ecbSquashData);
+            newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - ecbp[0].x
+                                   , newPosition.y ); // + squashedecbp[0].y - ecbp[0].y);
           }
         }
 
@@ -1541,6 +1531,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
         return collisionRoutine( squashedecbp, ecb1, newPosition, position
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
+                               , relevantSurfacesMinusPlatforms 
                                , newIgnoringPushouts
                                , newIgnoreLists
                                , stage, connectednessFunction
@@ -1557,9 +1548,9 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
           ecbSquashData = inflateECB (ecbp, touchingData[2], allRelevantSurfaces, stage, connectednessFunction);          
           if (ecbSquashData !== null) {
             ecbSquashData[1] *= oldSquashFactor;
-            squashedecbp = squashECBAt(newecbp, ecbSquashData);
-            newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - newecbp[0].x
-                                   , newPosition.y ); // + squashedecbp[0].y - newecbp[0].y);
+            squashedecbp = squashECBAt(ecbp, ecbSquashData);
+            newPosition = new Vec2D( newPosition.x + squashedecbp[0].x - ecbp[0].x
+                                   , newPosition.y ); // + squashedecbp[0].y - ecbp[0].y);
           }
         }
 
@@ -1574,6 +1565,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
         return collisionRoutine( squashedecbp, ecb1, newPosition, position
                                , relevantHorizSurfaces
                                , relevantVertSurfaces
+                               , relevantSurfacesMinusPlatforms 
                                , newIgnoringPushouts
                                , newIgnoreLists
                                , stage, connectednessFunction
@@ -1606,6 +1598,7 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       return collisionRoutine( newecbp, ecb1, newPosition, position // might want to keep this 4th argument as prevPosition and not update it to position?
                              , relevantHorizSurfaces
                              , relevantVertSurfaces
+                             , relevantSurfacesMinusPlatforms 
                              , newIgnoringPushouts
                              , newIgnoreLists
                              , stage, connectednessFunction
@@ -1647,9 +1640,6 @@ function inflateECB ( ecb : ECB, t : null | number
                              , new Vec2D ( focus.x         , focus.y + offset )
                              , new Vec2D ( focus.x - offset, focus.y          )
                              ];
-
-  console.log("'inflateECB': parameter t="+(t===null?"null":t)+".");
-  console.log("'inflateECB': focus for this parameter at ("+focus.x+","+focus.y+").");
 
   const closestCollision = findClosestCollision( ecb, pointlikeECB, focus, focus
                                                , relevantSurfaces
@@ -1722,6 +1712,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
                                    ) : [ Vec2D // new position
                                        , null | [string, number] // collision surface type and index
                                        , null | [null | number, number] // ECB scaling data
+                                       , ECB // final ECB to become next frame ECB1
                                        ] {
   pushoutSigns[0] = null;
   pushoutSigns[1] = null;
@@ -1740,6 +1731,7 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
   const relevantVertSurfaces = stageWalls;
 
   let relevantHorizSurfaces = [];
+  let relevantSurfacesMinusPlatforms = relevantVertSurfaces;
 
   switch (horizIgnore) {
     case "all":
@@ -1747,16 +1739,20 @@ export function runCollisionRoutine( ecbp : ECB, ecb1 : ECB, position : Vec2D, p
       break;
     case "platforms":
       relevantHorizSurfaces = stageGrounds.concat(stageCeilings);
+      relevantSurfacesMinusPlatforms = relevantSurfacesMinusPlatforms.concat(relevantHorizSurfaces);
       break;
     case "none":
     default:
       relevantHorizSurfaces = stageGrounds.concat(stageCeilings).concat(stagePlatforms);
+      relevantSurfacesMinusPlatforms = relevantSurfacesMinusPlatforms.concat(stageGrounds).concat(stageCeilings);
       break;
   }
+
 
   return collisionRoutine( ecbp, ecb1, position, prevPosition
                          , relevantHorizSurfaces
                          , relevantVertSurfaces
+                         , relevantSurfacesMinusPlatforms
                          , "no" // start off not ignoring any pushouts
                          , [[],[]] // start off with empty ignore lists
                          , stage, connectednessFunction
