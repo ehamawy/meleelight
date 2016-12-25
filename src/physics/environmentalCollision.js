@@ -246,8 +246,10 @@ function lineSweepParameters( line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D], fl
 // returns null (for no collision) or collision data: ["x", pushout value, sweeping parameter, angular parameter]
 function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : number
                           , position : Vec2D, counterclockwise : boolean
+                          , maybeWallAndThenWallTypeAndIndex : null | [[Vec2D, Vec2D], [string, number]]
                           , ignoreLists : IgnoreLists
-                          , corner : Vec2D, wallType : string) : null | [string, number, number, number | null, IgnoreLists] {
+                          , corner : Vec2D, wallType : string
+                          , stage : Stage, connectednessFunction : ConnectednessFunction ) : null | [string, number, number, number | null, IgnoreLists] {
 
   const [surfaceIgnoreList, cornerIgnoreList] = ignoreLists;
 
@@ -288,13 +290,40 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
       }
       
       const xIntersect = coordinateIntercept( [ ecbp[same], ecbp[other] ], [ corner, new Vec2D( corner.x+1, corner.y ) ]).x;
-      let pushout = corner.x - xIntersect ;
-
-      // temporary hack, TODO: this function should call the horizontal pushout routine if the second argument of the minimum is chosen
-      pushout = sign * Math.min(sign * pushout, sign * (corner.x - ecbp[cornerSide].x));
+      const pushout = corner.x - xIntersect ;
+      const clampedPushout = corner.x - ecbp[cornerSide].x;
       const angularParameter = getAngularParameter(t, same, other);
       console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across "+wallType+" corner. Sweeping parameter s="+s+".");
-      return ( ["x"+wallType, pushout + sign*additionalOffset, s, angularParameter, [surfaceIgnoreList, cornerIgnoreList.concat(corner)]] ); // s is the sweeping parameter, t just moves along the edge
+
+      if (sign*pushout > sign*clampedPushout) { // corner can't push out fully on its own, might need to defer to relevant wall
+        if (maybeWallAndThenWallTypeAndIndex === null || (wallType !== "l" && wallType !== "r")) {
+          // can't pass on to a relevant wall, directly push out
+          return ( ["x"+wallType, clampedPushout + sign*additionalOffset, s, angularParameter, [surfaceIgnoreList, cornerIgnoreList.concat(corner)]] );
+        }
+        else {
+          // defer to wall
+          //const newECBp = moveECB(ecbp, new Vec2D (clampedPushout, 0));
+          const situation = (same === 0 || other === 0 ) ? "d" : "u";
+          const horizPushout = getHorizPushout( ecb1
+                                              , ecbp // not using newECBp
+                                              , same
+                                              , maybeWallAndThenWallTypeAndIndex[0]
+                                              , maybeWallAndThenWallTypeAndIndex[1][0]
+                                              , maybeWallAndThenWallTypeAndIndex[1][1]
+                                              , clampedPushout, clampedPushout 
+                                              , situation
+                                              , [surfaceIgnoreList, cornerIgnoreList.concat(corner)]
+                                              , stage, connectednessFunction
+                                              );
+          const collisionType = horizPushout[1] === null ? ("x"+wallType) : wallType;
+          return ( [ collisionType, horizPushout[0], s, horizPushout[1], horizPushout[2] ] );
+        }
+
+      }
+      else {
+        return ( ["x"+wallType, pushout + sign*additionalOffset, s, angularParameter, [surfaceIgnoreList, cornerIgnoreList]] );
+      }
+
     }
     else {
       console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross "+wallType+" corner.");
@@ -314,7 +343,7 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
 function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
                         , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                         , oldTotalPushout : number, previousPushout : number
-                        , situation
+                        , situation : string
                         , ignoreLists : IgnoreLists
                         , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number, IgnoreLists] {
   console.log("'getHorizPushout': working with "+wallType+""+wallIndex+".");
@@ -1122,6 +1151,8 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
     let edgeSweepResult = null;
     let otherEdgeSweepResult = null;
 
+    const maybeWallAndThenWallTypeAndIndex = (wallType === "l" || wallType === "r") ? [wall, [wallType, wallIndex]] : null;
+
     // ignore all ECB edge collision checking if horizontal pushout is ignored
     // we already tackled this if ignoringPushouts === "all"
     if (ignoringPushouts !== "horiz") {
@@ -1154,7 +1185,9 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
         }
 
         if (!isOutside (corner, ecbp[same], ecbp[other], interiorECBside) && isOutside (corner, ecb1[same], ecb1[other], interiorECBside) ) {
-          edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, position, counterclockwise, ignoreLists, corner, wallType);
+          edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, position, counterclockwise
+                                             , maybeWallAndThenWallTypeAndIndex, ignoreLists, corner, wallType
+                                             , stage, connectednessFunction);
         }
       }
 
@@ -1177,7 +1210,9 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
              && !cornerIsIgnoredInSurfaces(otherCorner, surfaceIgnoreList, stage) 
              && !cornerIsIgnored(otherCorner, cornerIgnoreList)
            ) {
-          otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise, ignoreLists, otherCorner, wallType);
+          otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, position, otherCounterclockwise
+                                                  , maybeWallAndThenWallTypeAndIndex, ignoreLists, otherCorner, wallType
+                                                  , stage, connectednessFunction);
         }
       }
 
