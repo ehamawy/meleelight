@@ -14,6 +14,10 @@ export function norm(vec : Vec2D) : number {
   return ( Math.sqrt( dotProd(vec,vec) ));
 }
 
+export function add(vec1 : Vec2D, vec2 : Vec2D) : Vec2D {
+  return ( new Vec2D ( vec1.x + vec2.x, vec1.y + vec2.y) );
+}
+
 
 export function squaredDist (center1 : Vec2D, center2 : Vec2D) : number {
   return ( (center2.x - center1.x)*(center2.x - center1.x) + (center2.y - center1.y)*(center2.y - center1.y) );

@@ -22,6 +22,8 @@ export type Stage = {
   connected?    : Array< [boolean, Array< [ string, number] > ] >
 }
 
+export type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
+
 export function getSurfaceFromStage ( surfaceTypeAndIndex : [string, number], stage : Stage) : [Vec2D, Vec2D] {
   const surfaceType  = surfaceTypeAndIndex[0];
   const surfaceIndex = surfaceTypeAndIndex[1];
