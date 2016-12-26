@@ -881,7 +881,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         }
       }
       else if (nextPt === same) {
-        // slide ECB along wall, at most so that ECB same-side piont is at wallForward
+        // slide ECB along wall, at most so that ECB same-side point is at wallForward
         // if we stop short, put the ECBp there and end
         // otherwise, do the physics calculation to get pushout, and pass on to the next wall
         if (UDSign * ecbp[pt].y <= UDSign * wallForward.y) {
@@ -963,6 +963,99 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
   }
 
 };
+
+function getCeilingPushout( ecb1Top : Vec2D, ecbpTop : Vec2D
+                          , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
+                          , oldTotalPushout : number, previousPushout : number
+                          , ignoreLists : IgnoreLists
+                          , stage : Stage, connectednessFunction : ConnectednessFunction) : [number, null | number, IgnoreLists] {
+  console.log("'getCeilingPushout': working with "+wallType+""+wallIndex+".");
+  console.log("'getCeilingPushout': pushout total was "+oldTotalPushout+".");
+  console.log("'getCeilingPushout': previous pushout was "+previousPushout+".");
+
+  let surfaceIgnoreList = ignoreLists[0];
+  const cornerIgnoreList = ignoreLists[1];
+
+  const wallRight  = extremePoint(wall, "r");
+  const wallLeft   = extremePoint(wall, "l");
+  const wallTop    = extremePoint(wall, "t");
+  const wallBottom = extremePoint(wall, "b");
+
+  const wallAngle  = lineAngle([wallBottom, wallTop]);
+
+  const situation = (ecb1Top.x > ecbpTop.x) ? "l" : "r";
+
+  let wallForward  = wallRight;
+  let wallBackward = wallLeft;
+  let LRSign = 1;
+  let dir = "l"; // look clockwise in connected chains if going right
+  if (situation === "l") {
+    wallForward  = wallLeft;
+    wallBackward = wallRight;
+    LRSign = -1;
+    dir = "r"; // look counterclockwise in connected chains if going left
+  }
+
+  // initialisations
+  let intercept = null;
+  let pushout = 0;
+  let nextWallTypeAndIndex = null;
+  let nextWall = null;
+  let totalPushout = oldTotalPushout;
+  // end of initialisations
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // start main pushout logic
+
+  // essentially, this function does the same thing as 'getHorizPushout', but with x and y flipped
+  // moreover, significant simplifications result from only ever needing to consider the top ECB point
+  // this means that no corner cases can crop up
+
+
+  // first check if the ceiling can directly push out
+  if (LRSign * ecbpTop.x <= LRSign * wallForward.x) {
+    // stopped short: can push out side ECB point directly, so do that
+    intercept = coordinateIntercept(wall, vLineThrough(ecbpTop));
+    pushout = Math.min(0, intercept.y - ecbpTop.y);
+    if (totalPushout < pushout) { // i.e. Math.abs(totalPushout) > Math.abs(pushout), as ceilings give negative y-value pushouts
+      console.log("'getCeilingPushout': directly pushing out with total.");
+      return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
+    }
+    else {
+      console.log("'getCeilingPushout': directly pushing out.");
+      return [pushout, 2, [surfaceIgnoreList, cornerIgnoreList]];
+    }
+  }
+  else {
+    // current ceiling can't directly push out, defer to next ceiling if one exists
+    nextWallTypeAndIndex = connectednessFunction( [wallType, wallIndex], dir);
+    if (nextWallTypeAndIndex === null || nextWallTypeAndIndex[0] !== wallType) {
+      // no other ceiling further along, do the physics and end
+      intercept = coordinateIntercept( vLineThrough(wallForward), [ecb1Top, ecbpTop]);
+      pushout = wallForward.y - intercept.y;
+      totalPushout += Math.min(0, pushout - previousPushout);
+      console.log("'getCeilingPushout': doing physics and pushing out.");
+      surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
+      return [totalPushout, null, [surfaceIgnoreList, cornerIgnoreList]];
+    }
+    else {
+      nextWall = getSurfaceFromStage(nextWallTypeAndIndex, stage);
+
+      // do the physics to calculate pushout, and defer to next ceiling
+      intercept = coordinateIntercept ( vLineThrough(wallForward), [ecb1Top, ecbpTop]);
+      pushout = wallForward.y - intercept.y;
+      totalPushout += Math.min(0, pushout - previousPushout);
+      console.log("'getCeilingPushout': doing physics and deferring.");
+      surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
+      return getCeilingPushout( ecb1Top, ecbpTop
+                              , nextWall, wallType, nextWallTypeAndIndex[1]
+                              , totalPushout, pushout
+                              , [surfaceIgnoreList, cornerIgnoreList]
+                              , stage, connectednessFunction);
+    }
+  }
+};
+
 
 // finds which is the relevant potential ECB point of contact with a wall, depending on their angles
 function relevantECBPointFromWall(ecb : ECB, wallBottom : Vec2D, wallTop : Vec2D, wallType : string) : number {
@@ -1304,8 +1397,32 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
             }
           }
         } 
-        else {
-          // need to add an additional pushout, not included in horizontal pushout function
+        else if (wallType === "c") {
+          if (! isIgnored( [wallType, wallIndex], surfaceIgnoreList)) { // ceiling is not ignored
+            let pushout = 0;
+            let maybeAngularParameter = null;
+            [ pushout
+            , maybeAngularParameter
+            , [surfaceIgnoreList, cornerIgnoreList] 
+            ] = getCeilingPushout( ecb1[2], ecbp[2]
+                                 , wall, wallType, wallIndex
+                                 , 0, 0
+                                 , [surfaceIgnoreList, cornerIgnoreList] 
+                                 , stage, connectednessFunction);
+
+            console.log("'findCollision': ceiling pushout value is "+pushout+".");
+            // don't count a collision if not pushout occured
+            if (pushout !== 0) {
+              const newPointPosition = new Vec2D( position.x, position.y + pushout - additionalPushout); // negative sign for additional pushout as dealing with ceiling
+              closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter, [surfaceIgnoreList, cornerIgnoreList]];
+              // if top ECB point is no longer within wall bounds, erturn a "none" type collision instead
+              if (ecbp[2].x > wallRight.x || ecbp[2].x < wallLeft.x) {
+                closestPointCollision[0] = "n";
+              }
+            }
+          }
+        }
+        else { // ground or platform
           const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
                                             , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
           closestPointCollision = [wallType, newPointPosition, s, same, [surfaceIgnoreList, cornerIgnoreList]];
