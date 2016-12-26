@@ -1411,11 +1411,11 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
                                  , stage, connectednessFunction);
 
             console.log("'findCollision': ceiling pushout value is "+pushout+".");
-            // don't count a collision if not pushout occured
+            // don't count a collision if no pushout occurred
             if (pushout !== 0) {
               const newPointPosition = new Vec2D( position.x, position.y + pushout - additionalPushout); // negative sign for additional pushout as dealing with ceiling
               closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter, [surfaceIgnoreList, cornerIgnoreList]];
-              // if top ECB point is no longer within wall bounds, erturn a "none" type collision instead
+              // if top ECB point is no longer within wall bounds, return a "none" type collision instead
               if (ecbp[2].x > wallRight.x || ecbp[2].x < wallLeft.x) {
                 closestPointCollision[0] = "n";
               }
