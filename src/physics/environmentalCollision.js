@@ -1413,7 +1413,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
             console.log("'findCollision': ceiling pushout value is "+pushout+".");
             // don't count a collision if no pushout occurred
             if (pushout !== 0) {
-              const newPointPosition = new Vec2D( position.x, position.y + pushout - additionalPushout); // negative sign for additional pushout as dealing with ceiling
+              const newPointPosition = new Vec2D( position.x, position.y + pushout - additionalOffset); // negative sign for additional pushout as dealing with ceiling
               closestPointCollision = [wallType, newPointPosition, s, maybeAngularParameter, [surfaceIgnoreList, cornerIgnoreList]];
               // if top ECB point is no longer within wall bounds, return a "none" type collision instead
               if (ecbp[2].x > wallRight.x || ecbp[2].x < wallLeft.x) {
@@ -1424,7 +1424,7 @@ function findCollision ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPosition 
         }
         else { // ground or platform
           const newPointPosition = new Vec2D( position.x + (1-s)*ecb1[same].x + (s-1)*ecbp[same].x
-                                            , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalPushout);
+                                            , position.y + (1-s)*ecb1[same].y + (s-1)*ecbp[same].y + additionalOffset);
           closestPointCollision = [wallType, newPointPosition, s, same, [surfaceIgnoreList, cornerIgnoreList]];
         }
       }
@@ -1516,24 +1516,33 @@ function reinflateECB ( ecb : ECB, position : Vec2D
                       ) : [Vec2D, null | [string, number], null | [null | number, number], ECB] {
 
   let q = 1;
-  let squashCenter = null;
+  let angularParameter = null;
   if (oldecbSquashData !== null) {
     q = 1 / oldecbSquashData[1] + additionalOffset/5;
-    squashCenter = oldecbSquashData[0];
+    angularParameter = oldecbSquashData[0];
+    /*
   }
+  else if (touchingData !== null && touchingData[2] !== null) {
+    angularParameter = touchingData[2];
+  }
+  */
 
-  const focus = ecbFocusFromAngularParameter(ecb, squashCenter);
-  const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
-                      , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
-                      , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
-                      , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
-                      ];
-  const ecbSquashData = inflateECB (fullsizeecb, null, relevantSurfaces, stage, connectednessFunction);
-  if (ecbSquashData !== null) {
-    const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
-    const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
-                                 , position.y ); // + squashedecb[0].y - ecb[0].y);
-    return [newPosition, touchingData, ecbSquashData, squashedecb];
+    const focus = ecbFocusFromAngularParameter(ecb, angularParameter);
+    const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
+                        , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
+                        , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
+                        , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
+                        ];
+    const ecbSquashData = inflateECB (fullsizeecb, angularParameter, relevantSurfaces, stage, connectednessFunction);
+    if (ecbSquashData !== null) {
+      const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
+      const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
+                                   , position.y ); // + squashedecb[0].y - ecb[0].y);
+      return [newPosition, touchingData, ecbSquashData, squashedecb];
+    }
+    else {
+      return [position, touchingData, null, ecb];  
+    }
   }
   else {
     return [position, touchingData, null, ecb];
@@ -1708,8 +1717,13 @@ function collisionRoutine ( ecbp : ECB, ecb1 : ECB, position : Vec2D, prevPositi
       }
       // prioritise ground collisions when reporting the type of the last collision
       // warning: we are not using **position** information from just ground collisions, but from latest collision
-      else if (surfaceTypeAndIndex !== null && ( surfaceTypeAndIndex[0] === "g" || surfaceTypeAndIndex[0] === "p")) {
+      else if (    surfaceTypeAndIndex !== null 
+                && ( surfaceTypeAndIndex[0] === "g" || surfaceTypeAndIndex[0] === "p" || (touchingData[0] !== "g" && touchingData[0] !== "p"))
+              ) {
         touchingData = [surfaceTypeAndIndex[0], surfaceTypeAndIndex[1], angularParameter];
+      }
+      else if (touchingData[2] === null) {
+        touchingData[2] = angularParameter; // might be useful for later computations to use this parameter
       }
 
       return collisionRoutine( newecbp, ecb1, newPosition, position // might want to keep this 4th argument as prevPosition and not update it to position?
