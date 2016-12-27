@@ -44,7 +44,7 @@ function vLineThrough ( point : Vec2D ) : [Vec2D, Vec2D] {
   return [ point, new Vec2D ( point.x, point.y+1)];
 };
 
-// vertical line through a point
+// either horizontal or vertical line through a point
 function lineThrough ( point : Vec2D, xOrY : number ) : [Vec2D, Vec2D] {
   if (xOrY === 0) {
     return hLineThrough(point);
@@ -1618,8 +1618,8 @@ function slideECB ( ecb1 : ECB, ecbp : ECB, srcECB : ECB, tgtECB : ECB
   }
 };
 
-
-
+// ----------------------------------------------------------------------------------------------------------------------------------
+// some more utility functions
 
 // finds which is the relevant potential ECB point of contact with a wall, depending on their angles
 function relevantECBPointFromWall(ecb : ECB, wallBottom : Vec2D, wallTop : Vec2D, wallType : string) : number {
@@ -1996,6 +1996,11 @@ function collisionRoutine ( ecb1 : ECB, ecbp : ECB, position : Vec2D, prevPositi
   }
 };
 
+
+// ----------------------------------------------------------------------------------------------------------------------------------
+// ECB squashing and re-inflating
+
+
 // finds the ECB squash factor for a grounded ECB
 export function groundedECBSquashFactor( ecbTop : Vec2D, ecbBottom : Vec2D, ceilings : Array<[Vec2D, Vec2D]>) : null | number {
   const ceilingYValues = ceilings.map ( (ceil) => {
@@ -2077,6 +2082,10 @@ function reinflateECB ( ecb : ECB, position : Vec2D
     return [position, touchingData, null, ecb];
   }
 };
+
+
+// ----------------------------------------------------------------------------------------------------------------------------------
+// main collision routine
 
 
 // this function initialises necessary data and then calls the main collision routine loop
