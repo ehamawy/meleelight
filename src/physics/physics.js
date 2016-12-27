@@ -610,8 +610,8 @@ function findAndResolveCollisions ( i : number, input : any
 
   // type : [ Vec2D       , null | [string, number], null | [Vec2D, number], ECB ]
   //        [ new position, collision label        , ECB squash data       , final ECBp position ]
-  const collisionData = runCollisionRoutine ( player[i].phys.ECBp
-                                            , player[i].phys.ECB1
+  const collisionData = runCollisionRoutine ( player[i].phys.ECB1
+                                            , player[i].phys.ECBp
                                             , player[i].phys.pos
                                             , player[i].phys.posPrev
                                             , ecbSquashData[i]
