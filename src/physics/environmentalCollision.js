@@ -871,11 +871,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);
         }
         else if (nextPt === same) {
           // slide ECB along wall, at most so that ECB same point is at wallForward
@@ -904,11 +904,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             console.log("'getHorizPushout': cur = fwd, ecb = fwd, nxt = same, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             output = getHorizPushout( ecb1, ecbp, same
-                                   , nextWall, wallType, nextWallTypeAndIndex[1]
-                                   , totalPushout, pushout
-                                   , situation
-                                   , [surfaceIgnoreList, cornerIgnoreList]
-                                   , stage, connectednessFunction);
+                                    , nextWall, wallType, nextWallTypeAndIndex[1]
+                                    , totalPushout, pushout
+                                    , situation
+                                    , [surfaceIgnoreList, cornerIgnoreList]
+                                    , stage, connectednessFunction);
           }
         }
         else { // nextPt === bPt
@@ -958,11 +958,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             console.log("'getHorizPushout': cur = fwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             output = getHorizPushout( ecb1, ecbp, same
-                                   , nextWall, wallType, nextWallTypeAndIndex[1]
-                                   , totalPushout, pushout
-                                   , situation
-                                   , [surfaceIgnoreList, cornerIgnoreList]
-                                   , stage, connectednessFunction);
+                                    , nextWall, wallType, nextWallTypeAndIndex[1]
+                                    , totalPushout, pushout
+                                    , situation
+                                    , [surfaceIgnoreList, cornerIgnoreList]
+                                    , stage, connectednessFunction);
           }
         }
       }
@@ -1037,11 +1037,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = bwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);
         }
       }
       else if (nextPt === same) {
@@ -1080,11 +1080,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = same, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             output = getHorizPushout( ecb1, ecbp, same
-                                   , nextWall, wallType, nextWallTypeAndIndex[1]
-                                   , totalPushout, pushout
-                                   , situation
-                                   , [surfaceIgnoreList, cornerIgnoreList]
-                                   , stage, connectednessFunction);
+                                    , nextWall, wallType, nextWallTypeAndIndex[1]
+                                    , totalPushout, pushout
+                                    , situation
+                                    , [surfaceIgnoreList, cornerIgnoreList]
+                                    , stage, connectednessFunction);
           }
         }
         else {
@@ -1095,11 +1095,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           console.log("'getHorizPushout': cur = bwd, ecb = same, nxt = same, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);
         }
 
       }
@@ -1139,11 +1139,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             console.log("'getHorizPushout': cur = bwd, ecb = bwd, nxt = fwd, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             output = getHorizPushout( ecb1, ecbp, same
-                                   , nextWall, wallType, nextWallTypeAndIndex[1]
-                                   , totalPushout, pushout
-                                   , situation
-                                   , [surfaceIgnoreList, cornerIgnoreList]
-                                   , stage, connectednessFunction);
+                                    , nextWall, wallType, nextWallTypeAndIndex[1]
+                                    , totalPushout, pushout
+                                    , situation
+                                    , [surfaceIgnoreList, cornerIgnoreList]
+                                    , stage, connectednessFunction);
           }
         }
         else {
@@ -1154,11 +1154,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           console.log("'getHorizPushout': cur = bwd, ecb = fwd, nxt = fwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);
         } 
       }
     }
@@ -1206,7 +1206,7 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
       }
       else {
         // didn't stop short, do the physics
-        intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[same], ecbp[same]]); // same not bPt
+        intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
         pushout = wallForward.x - intercept.x;
         totalPushout += pushoutClamp(pushout - previousPushout, wallType);
         console.log("'getHorizPushout': cur = same, ecb = bwd-same, nxt = null, doing physics and pushing out.");
@@ -1262,11 +1262,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
             console.log("'getHorizPushout': cur = same, ecb = same, nxt = fwd, doing physics and deferring.");
             surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
             output = getHorizPushout( ecb1, ecbp, same
-                                   , nextWall, wallType, nextWallTypeAndIndex[1]
-                                   , totalPushout, pushout
-                                   , situation
-                                   , [surfaceIgnoreList, cornerIgnoreList]
-                                   , stage, connectednessFunction);
+                                    , nextWall, wallType, nextWallTypeAndIndex[1]
+                                    , totalPushout, pushout
+                                    , situation
+                                    , [surfaceIgnoreList, cornerIgnoreList]
+                                    , stage, connectednessFunction);
           }
         }
         else {
@@ -1277,11 +1277,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           console.log("'getHorizPushout': cur = same, ecb = fwd, nxt = fwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);     
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);     
         }
       }
       else if (nextPt === same) {
@@ -1309,11 +1309,11 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
           console.log("'getHorizPushout': cur = same, ecb = same, nxt = same, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);
         }
       }
       else { // nextPt === bPt
@@ -1355,17 +1355,17 @@ function getHorizPushout( ecb1 : ECB, ecbp : ECB, same : number
         }
         else {
           // didn't stop short, do the physics
-          intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[same], ecbp[same]]); // same not bPt
+          intercept = coordinateIntercept( hLineThrough( wallForward), [ecb1[bPt], ecbp[bPt]]);
           pushout = wallForward.x - intercept.x;
           totalPushout += pushoutClamp(pushout - previousPushout, wallType);
           console.log("'getHorizPushout': cur = same, ecb = bwd, nxt = bwd, doing physics and deferring.");
           surfaceIgnoreList = addToIgnoreList(surfaceIgnoreList, [wallType, wallIndex]);
           output = getHorizPushout( ecb1, ecbp, same
-                                 , nextWall, wallType, nextWallTypeAndIndex[1]
-                                 , totalPushout, pushout
-                                 , situation
-                                 , [surfaceIgnoreList, cornerIgnoreList]
-                                 , stage, connectednessFunction);
+                                  , nextWall, wallType, nextWallTypeAndIndex[1]
+                                  , totalPushout, pushout
+                                  , situation
+                                  , [surfaceIgnoreList, cornerIgnoreList]
+                                  , stage, connectednessFunction);
         }
       }
     }
