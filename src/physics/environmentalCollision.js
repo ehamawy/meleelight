@@ -44,6 +44,16 @@ function vLineThrough ( point : Vec2D ) : [Vec2D, Vec2D] {
   return [ point, new Vec2D ( point.x, point.y+1)];
 };
 
+// vertical line through a point
+function lineThrough ( point : Vec2D, xOrY : number ) : [Vec2D, Vec2D] {
+  if (xOrY === 0) {
+    return hLineThrough(point);
+  }
+  else {
+    return vLineThrough(point);
+  }
+};
+
 // next ECB point index, counterclockwise or clockwise
 function turn(number : number, counterclockwise : boolean = true ) : number {
   if (counterclockwise) {
@@ -660,8 +670,6 @@ function getCornerPushout( ecb1 : ECB, ecbp : ECB, wallType : string
                          , stage : Stage, connectednessFunction : ConnectednessFunction ) : [string, Vec2D, null | number, IgnoreLists] {
   const [s, [corner, same, other]] = edgeSweepResult;
   const [surfaceIgnoreList, cornerIgnoreList] = ignoreLists;
-
-
 
   let sign = 1;
   let cornerSide = 3;
@@ -1479,6 +1487,138 @@ function getCeilingPushout( ecb1Top : Vec2D, ecbpTop : Vec2D
 
   return output;
 };
+
+
+type SlideDatum = null | { kind : "stop", value : [Vec2D, null | number, IgnoreLists] } | { kind : "cont", value : [number, number, IgnoreLists] }
+
+// this function figures out if we can move the ECB, from the source ECB to the target ECB, in the middle of a pushout routine
+// 'stop' means we interrupt the current pushout routine, either to transfer to another surface or to end pushout altogether
+// 'cont' means we can continue what we were trying to do, no unexpected collisions cropped up
+function slideECB ( ecb1 : ECB, ecbp : ECB, srcECB : ECB, tgtECB : ECB
+                  , same : number, pt : number
+                  , angularParameter : number
+                  , wallType : string
+                  , wallAndThenWallTypeAndIndexs : Array<LabelledSurface>
+                  , oldTotalPushout : number, previousPushout : number
+                  , ignoringPushouts : string
+                  , ignoreLists : IgnoreLists
+                  , stage : Stage, connectednessFunction : ConnectednessFunction
+                  ) : SlideDatum {
+
+  const [surfaceIgnoreList, cornerIgnoreList] = ignoreLists;
+  const xOrY = (wallType === "l" || wallType === "r") ? 0 : 1;
+
+  // initialisations
+  let intercept1 = null;
+  let intercept2 = null;
+  let pushout = 0;
+  let totalPushout = oldTotalPushout;
+  // end of initialisations
+
+  // figure our whether a collision occured while moving srcECB -> tgtECB
+  const touchingDatum = findClosestCollision( srcECB, tgtECB
+                                            , wallAndThenWallTypeAndIndexs
+                                            , ignoringPushouts
+                                            , ignoreLists
+                                            , stage, connectednessFunction);
+
+  if (touchingDatum === null) {
+    // do physics to compute pushout arising from this slide
+    intercept1 = coordinateIntercept( lineThrough( srcECB[pt], xOrY), [ecb1[pt], ecbp[pt]] );
+    intercept2 = coordinateIntercept( lineThrough( tgtECB[pt], xOrY), [ecb1[pt], ecbp[pt]] );
+    pushout =     getXOrYCoord(tgtECB[pt], xOrY ) - getXOrYCoord(intercept2, xOrY )
+              - ( getXOrYCoord(srcECB[pt], xOrY ) - getXOrYCoord(intercept1, xOrY ) );
+    totalPushout += pushoutClamp(pushout, wallType);
+    console.log("'slideECB': sliding uninterrupted.");
+    return { kind : "cont", value : [totalPushout, pushout, ignoreLists] };
+  }
+  else {
+    const [nextWallType, nextWallIndex] = touchingDatum[0];
+    const s = touchingDatum[1];
+    const r = Math.max(0, s - additionalOffset); // safeguard
+    const collisionType = touchingDatum[2];
+    const nextWall = getSurfaceFromStage([nextWallType, nextWallIndex], stage);
+    const situation = srcECB[0].y > tgtECB[0].y ? "d" : "u";
+
+
+    const midECB = [ new Vec2D( (1-r)*srcECB[0].x + r*tgtECB[0].x, (1-r)*srcECB[0].y + r*tgtECB[0].y )
+                   , new Vec2D( (1-r)*srcECB[1].x + r*tgtECB[1].x, (1-r)*srcECB[1].y + r*tgtECB[1].y )
+                   , new Vec2D( (1-r)*srcECB[2].x + r*tgtECB[2].x, (1-r)*srcECB[2].y + r*tgtECB[2].y )
+                   , new Vec2D( (1-r)*srcECB[3].x + r*tgtECB[3].x, (1-r)*srcECB[3].y + r*tgtECB[3].y )
+                   ];
+
+    if (collisionType.kind === "wall" && nextWallType === wallType) {
+      // do physics to calculate pushout, and pass on to this new surface
+      intercept1 = coordinateIntercept( lineThrough( srcECB[pt], xOrY), [ecb1[pt], ecbp[pt]] );
+      intercept2 = coordinateIntercept( lineThrough( midECB[pt], xOrY), [ecb1[pt], ecbp[pt]] );
+      pushout =     getXOrYCoord(midECB[pt], xOrY ) - getXOrYCoord(intercept2, xOrY )
+                - ( getXOrYCoord(srcECB[pt], xOrY ) - getXOrYCoord(intercept1, xOrY ) );
+      totalPushout += pushoutClamp(pushout, wallType);
+      if (wallType === "l" || wallType === "r") {
+        console.log("'slideECB': deferring to interrupting wall.");
+        return { kind : "stop", value : getHorizPushout( ecb1, ecbp, same
+                                                       , nextWall, wallType, nextWallIndex
+                                                       , totalPushout, pushout
+                                                       , situation
+                                                       , ignoreLists
+                                                       , stage, connectednessFunction ) };
+      }
+      else if (wallType === "c") {
+        console.log("'slideECB': deferring to interrupting ceiling.");
+        return { kind : "stop", value : getCeilingPushout( ecb1[2], ecbp[2]
+                                                         , nextWall, wallType, nextWallIndex
+                                                         , totalPushout, pushout
+                                                         , ignoreLists
+                                                         , stage, connectednessFunction ) };
+      }
+      else {
+        // this should never happen
+        console.log("error in 'slideECB': not working with wall or ceiling.");
+        return null;
+      }
+    }
+    else if ( collisionType.kind === "corner" && (    ((collisionType[1] === 1 || collisionType[2] === 1) && wallType === "l")
+                                                   || ((collisionType[1] === 3 || collisionType[2] === 3) && wallType === "r")
+                                                 )
+            ) {
+      const corner = collisionType.value[0];
+      // find the wall to be considered for deferral
+      const maybeWallAndThenWallTypeAndIndex = findWallFromCorner(corner, situation, same, stage);
+      if (maybeWallAndThenWallTypeAndIndex === null || maybeWallAndThenWallTypeAndIndex[1][0] !== wallType) {
+        // weird situation, make it end the slide (???)
+        console.log("'slideECB': weird situation, corner collision interrupting slide.");
+        const pushout = new Vec2D ( (1-r)*srcECB[0].x + r*tgtECB[0].x - ecbp[0].x
+                                  , (1-r)*srcECB[0].y + r*tgtECB[0].y - ecbp[0].y );
+        return { kind : "stop", value : [pushout, angularParameter, ignoreLists] };
+      }
+      else {
+        // do some physics to calculate pushout, and pass on to the wall
+        intercept1 = coordinateIntercept( lineThrough( srcECB[pt], xOrY), [ecb1[pt], ecbp[pt]] );
+        intercept2 = coordinateIntercept( lineThrough( midECB[pt], xOrY), [ecb1[pt], ecbp[pt]] );
+        pushout =     getXOrYCoord(midECB[pt], xOrY ) - getXOrYCoord(intercept2, xOrY )
+                  - ( getXOrYCoord(srcECB[pt], xOrY ) - getXOrYCoord(intercept1, xOrY ) );
+        totalPushout += pushoutClamp(pushout, wallType);
+  
+        console.log("'slideECB': deferring to interrupting wall by way of corner collision.");
+        return { kind : "stop", value : getHorizPushout( ecb1, ecbp, same
+                                                       , nextWall, wallType, nextWallIndex
+                                                       , totalPushout, pushout
+                                                       , situation
+                                                       , ignoreLists
+                                                       , stage, connectednessFunction ) };
+      }
+    }
+    else {
+      // end pushout routine immediately, a conflict occurred
+      const pushout = new Vec2D ( (1-r)*srcECB[0].x + r*tgtECB[0].x - ecbp[0].x
+                                , (1-r)*srcECB[0].y + r*tgtECB[0].y - ecbp[0].y );
+      console.log("'slideECB': interrupting sliding, conflicting pushouts.");
+      return { kind : "stop", value : [pushout, angularParameter, ignoreLists] };
+    }
+  }
+};
+
+
 
 
 // finds which is the relevant potential ECB point of contact with a wall, depending on their angles
