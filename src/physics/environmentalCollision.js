@@ -836,28 +836,20 @@ function findNextTargetFromCorner ( srcECB : ECB, ecbp : ECB, corner : Vec2D, an
   let tgtECB = ecbp;
   let pushout = 0;
 
-  if ( LRSign * ecbp[same].x < LRSign * corner.x ) {
-    if ( UDSign * ecbp[same].y < UDSign * corner.y ) {
-      const s = (corner.y - srcECB[same].y) / (ecbp[same].y - srcECB[same].y);
-      tgtECB = interpolateECB(srcECB, ecbp, s);
-      pushout = corner.x - tgtECB[same].x;
-    }
-    else if ( UDSign * ecbp[other].y < UDSign * corner.y ) {
-      const intercept = coordinateIntercept( hLineThrough(corner), [ecbp[same], ecbp[other]]);
-      pushout = corner.x - intercept.x;
-    }
-    else {
-      const s = (corner.y - srcECB[other].y) / (ecbp[other].y - srcECB[other].y);
-      tgtECB = interpolateECB(srcECB, ecbp, s);
-      pushout = corner.x - tgtECB[other].x;
-    }
+  if ( UDSign * ecbp[same].y < UDSign * corner.y ) {
+    const s = (corner.y - srcECB[same].y) / (ecbp[same].y - srcECB[same].y);
+    tgtECB = interpolateECB(srcECB, ecbp, s);
+    tgtECB = moveECB(tgtECB, new Vec2D (corner.x - tgtECB[same].x + additionalPushout, 0));
   }
-
-  if ( (same === 3) && pushout < 0 || (same === 1) && pushout > 0) {
-    tgtECB = moveECB(tgtECB, new Vec2D (additionalPushout, 0));
+  else if ( UDSign * ecbp[other].y < UDSign * corner.y ) {
+    const intercept = coordinateIntercept( hLineThrough(corner), [ecbp[same], ecbp[other]]);
+    tgtECB = moveECB(tgtECB, new Vec2D (corner.x - intercept.x + additionalPushout, 0));
   }
   else {
-    tgtECB = moveECB(tgtECB, new Vec2D (pushout + additionalPushout, 0));
+    const s = (corner.y - srcECB[other].y) / (ecbp[other].y - srcECB[other].y);
+    tgtECB = interpolateECB(srcECB, ecbp, s);
+    tgtECB = moveECB(tgtECB, new Vec2D(corner.x - tgtECB[other].x + additionalPushout, 0));
+    pushout = corner.x - tgtECB[other].x;
   }
 
   drawECB(ecbp  , "#1098c9");
