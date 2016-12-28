@@ -619,10 +619,14 @@ function sliders( srcECB : ECB, tgtECB : ECB, ecbp : ECB
     let newTouchingDatum;
     let angular;
     let newTgtECB;
+    let newSlidingType = null;
 
     if ( slideObject.kind === "surface" ) {
       const surface = slideObject.surface;
       const surfaceType = slideObject.type;
+      if (surfaceType === "l" || surfaceType === "r" || surfaceType === "c") {
+        newSlidingType = surfaceType;
+      }
       angular = slideObject.pt;
       newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : angular };
       newTgtECB = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType );
@@ -630,13 +634,19 @@ function sliders( srcECB : ECB, tgtECB : ECB, ecbp : ECB
     else {
       const corner = slideObject.corner;
       angular = slideObject.angular;
+      if (angular < 2 && angular > 0) {
+        newSlidingType = "l";
+      }
+      else if (angular > 2) {
+        newSlidingType = "r";
+      }
       newTgtECB = findNextTargetFromCorner ( newSrcECB, newECBp, corner, angular );
       newTouchingDatum = { kind : "corner", angular : angular };
     }
     return sliders ( newSrcECB, newTgtECB, newECBp
                    , labelledSurfaces
                    , newTouchingDatum
-                   , { type : slidingAgainst.type // type hasn't changed, as we transferred
+                   , { type : newSlidingType
                      , angular : angular } );
   }
 };
