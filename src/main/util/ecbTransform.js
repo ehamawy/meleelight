@@ -1,8 +1,10 @@
 // @flow
+/*eslint indent:1*/
 
 import {Vec2D} from "./Vec2D";
 
 export type ECB = [Vec2D, Vec2D, Vec2D, Vec2D];
+export type SquashDatum = { factor : number, location : null | number };
 
 export function moveECB (ecb : ECB, vec : Vec2D) : ECB {
   return ( [ new Vec2D (ecb[0].x+vec.x,ecb[0].y+vec.y)
@@ -11,9 +13,9 @@ export function moveECB (ecb : ECB, vec : Vec2D) : ECB {
            , new Vec2D (ecb[3].x+vec.x,ecb[3].y+vec.y) ] );
 };
 
-export function squashECBAt (ecb : ECB, squashData : [null | number, number]) : ECB {
-  const pos = ecbFocusFromAngularParameter(ecb, squashData[0]);
-  const t   = squashData[1];
+export function squashECBAt (ecb : ECB, squashDatum : SquashDatum) : ECB {
+  const pos = ecbFocusFromAngularParameter(ecb, squashDatum.location);
+  const t   = squashDatum.factor;
   return ( [ new Vec2D ( t*ecb[0].x + (1-t)*pos.x, t*ecb[0].y + (1-t)*pos.y)
            , new Vec2D ( t*ecb[1].x + (1-t)*pos.x, t*ecb[1].y + (1-t)*pos.y)
            , new Vec2D ( t*ecb[2].x + (1-t)*pos.x, t*ecb[2].y + (1-t)*pos.y)
@@ -38,4 +40,11 @@ export function ecbFocusFromAngularParameter( ecb : ECB, t : null | number ) : V
     focus = new Vec2D ( (1 - (t-3))*ecb[3].x + (t-3)*ecb[0].x, (1 - (t-3))*ecb[3].y + (t-3)*ecb[0].y );
   }
   return focus;
+}
+ 
+export function interpolateECB( srcECB : ECB, tgtECB : ECB, s : number) {
+  return [ new Vec2D( (1-s)*srcECB[0].x + s*tgtECB[0].x, (1-s)*srcECB[0].y + s*tgtECB[0].y )
+         , new Vec2D( (1-s)*srcECB[1].x + s*tgtECB[1].x, (1-s)*srcECB[1].y + s*tgtECB[1].y )
+         , new Vec2D( (1-s)*srcECB[2].x + s*tgtECB[2].x, (1-s)*srcECB[2].y + s*tgtECB[2].y )
+         , new Vec2D( (1-s)*srcECB[3].x + s*tgtECB[3].x, (1-s)*srcECB[3].y + s*tgtECB[3].y ) ];
 }

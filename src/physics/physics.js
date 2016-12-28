@@ -20,6 +20,8 @@ import {moveECB, squashECBAt} from "../main/util/ecbTransform";
 
 // eslint-disable-next-line no-duplicate-imports
 import type {ConnectednessFunction} from "../stages/util/connectednessFromChains";
+// eslint-disable-next-line no-duplicate-imports
+import type {SquashDatum} from "../main/util/ecbTransform";
 
 
 function dealWithCollision(i : number, newCenter : Vec2D) : void {
@@ -545,11 +547,16 @@ function lCancelUpdate ( i:number, input : any ) : void {
 };
 
 
-const ecbSquashData : [ null | [null | number, number]
-                      , null | [null | number, number]
-                      , null | [null | number, number]
-                      , null | [null | number, number] 
-                      ] = [null, null, null, null];
+const nullSquashDatum = { location : null, factor : 1};
+
+const ecbSquashData : [ SquashDatum
+                      , SquashDatum
+                      , SquashDatum
+                      , SquashDatum
+                      ] = [ nullSquashDatum
+                          , nullSquashDatum
+                          , nullSquashDatum
+                          , nullSquashDatum ];
 
 
 function findAndResolveCollisions ( i : number, input : any
@@ -613,20 +620,17 @@ function findAndResolveCollisions ( i : number, input : any
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1
                                             , player[i].phys.ECBp
                                             , player[i].phys.pos
-                                            , player[i].phys.posPrev
                                             , ecbSquashData[i]
                                             , horizIgnore
                                             , activeStage
-                                            , connectednessFunction
                                             );
 
   ecbSquashData[i] = collisionData[2];
-  const ecbSquashFactor = ecbSquashData[i] === null ? 1 : ecbSquashData[i][1];
 
   if ( collisionData[1] !== null ) {
     const newPosition = collisionData[0];
     const ecbpBottom = new Vec2D ( newPosition.x
-                                 , newPosition.y + ecbSquashFactor * ecbOffset[0]);
+                                 , newPosition.y + ecbSquashData[i].factor * ecbOffset[0]);
     const surfaceLabel = collisionData[1][0];
     const surfaceIndex = collisionData[1][1];
 
@@ -665,15 +669,13 @@ function findAndResolveCollisions ( i : number, input : any
     const groundSquashFactor = groundedECBSquashFactor( new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y + ecbOffset[3] ) //    top non-squashed ECBp point
                                                       , new Vec2D (player[i].phys.pos.x, player[i].phys.pos.y ) // bottom non-squashed ECBp point, no offset as grounded
                                                       , toList(activeStage.ceiling));
-    if (groundSquashFactor !== null && (ecbSquashData[i] === null || groundSquashFactor < ecbSquashData[i][1])) {
-      ecbSquashData[i] = [0, groundSquashFactor];
+    if (groundSquashFactor !== null && (groundSquashFactor < ecbSquashData[i].factor)) {
+      ecbSquashData[i] = { location : 0, factor : groundSquashFactor};
     }
     if (ecbSquashData[i] !== null) {
-      ecbSquashData[i][0] = 0; // always squash from the bottom ECB point if player is grounded
+      ecbSquashData[i].location = 0;
     }
-  }
-
-  
+  }  
 
   return [stillGrounded, backward, notTouchingWalls];
 };
