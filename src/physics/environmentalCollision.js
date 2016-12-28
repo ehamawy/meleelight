@@ -2,7 +2,6 @@
 /*eslint indent:1*/ // get stuffed
 
 import {Vec2D, getXOrYCoord, putXOrYCoord} from "../main/util/Vec2D";
-import {Box2D} from "../main/util/Box2D";
 import {dotProd, scalarProd, add, subtract, norm, orthogonalProjection} from "../main/linAlg";
 import {findSmallestWithin} from "../main/util/findSmallestWithin";
 import {solveQuadraticEquation} from "../main/util/solveQuadraticEquation";
@@ -17,8 +16,7 @@ import type {ECB, SquashDatum} from "../main/util/ecbTransform";
 import type {Stage, LabelledSurface} from "../stages/stage";
 
 
-const magicAngle : number = Math.PI/6;
-const maximumCollisionDetectionPasses = 15;
+
 export const additionalOffset : number = 0.00001;
 
 // -----------------------------------------------------
@@ -118,22 +116,6 @@ export function coordinateIntercept (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec
   const t = coordinateInterceptParameter(line1, line2);
   return ( new Vec2D( line2[0].x + t*(line2[1].x - line2[0].x), line2[0].y + t*(line2[1].y - line2[0].y) ) );
 };
-
-
-// clamps a number depending on surface type
-function pushoutClamp( push : number, wallType : string ) {
-  switch(wallType) {
-    case "r":
-    case "g":
-    case "p":
-    default:
-      return (push < 0 ? 0 : push );
-    case "l":
-    case "c":
-      return (push > 0 ? 0 : push );
-  }
-};
-
 
 // ----------------------------------------------------------------------------------------------------------------------------------
 // basic collision detection functions
@@ -343,10 +325,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
   // right wall by default
   let wallTopOrRight = wallTop;
   let wallBottomOrLeft = wallBottom;
-  let extremeWall = wallRight;
-  let extremeSign = 1;
   let same = 3;
-  let opposite = 1;
   let xOrY = 1; // y by default
   let isPlatform = false;
   let flip = false;
@@ -357,11 +336,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
   switch(wallType) {
     case "l": // left wall
       same = 1;
-      opposite = 3;
       flip = true;
-      sign = -1;
-      extremeWall = wallLeft;
-      extremeSign = -1;
       break;
     case "p": // platform
       isPlatform = true;
@@ -369,10 +344,8 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
     case "b":
     case "d":
       same = 0;
-      opposite = 2;
       wallTopOrRight  = wallRight;
       wallBottomOrLeft = wallLeft;
-      extremeWall = wallTop;
       xOrY = 0;
       flip = true;
       sign = -1;
@@ -381,11 +354,8 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
     case "t":
     case "u":
       same = 2;
-      opposite = 0;
       wallTopOrRight  = wallRight;
       wallBottomOrLeft = wallLeft;
-      extremeSign = -1;
-      extremeWall = wallBottom;
       xOrY = 0;
       break;
     default: // right wall by default
@@ -880,14 +850,6 @@ function relevantECBPointFromWall(ecb : ECB, wallBottom : Vec2D, wallTop : Vec2D
 
 };
 
-// finds the pushout value to put a certain ECB edge onto a corner
-// returns a pushout value, plus the angular parameter which records where the ECB will be touching after pushing out
-function putEdgeOnCorner( point1 : Vec2D, point2 : Vec2D, corner : Vec2D, wallType : string) : [number, number] {
-  const intercept = coordinateIntercept( [point1, point2], hLineThrough(corner));
-  const pushout = pushoutClamp(corner.x - intercept.x, wallType);
-  const parameter = (intercept.x - point1.x) / (point2.x - point1.x);
-  return [pushout, parameter];
-};
 
 function getAngularParameter ( t : number, same : number, other : number) {
   if (same === 3 && other === 0) {
