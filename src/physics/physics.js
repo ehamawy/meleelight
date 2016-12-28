@@ -205,16 +205,15 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
 };
 
 function dealWithCeilingCollision(i : number, newCenter : Vec2D
-                                 , offsets : [number, number, number, number]
+                                 , ecbTop : Vec2D
                                  , input : any) : void {
-  const newECBTop = new Vec2D (newCenter.x, newCenter.y + offsets[3]);
   player[i].phys.pos = newCenter;
   if (actionStates[characterSelections[i]][player[i].actionState].headBonk) {
     if (player[i].hit.hitstun > 0) {
       if (player[i].phys.techTimer > 0) {
         actionStates[characterSelections[i]].TECHU.init(i,input);
       } else {
-        drawVfx("ceilingBounce", newECBTop, 1);
+        drawVfx("ceilingBounce", ecbTop, 1);
         sounds.bounce.play();
         actionStates[characterSelections[i]].STOPCEIL.init(i,input);
       }
@@ -629,8 +628,7 @@ function findAndResolveCollisions ( i : number, input : any
 
   if ( collisionData[1] !== null ) {
     const newPosition = collisionData[0];
-    const ecbpBottom = new Vec2D ( newPosition.x
-                                 , newPosition.y + ecbSquashData[i].factor * ecbOffset[0]);
+    const newECB = collisionData[3];
     const surfaceLabel = collisionData[1][0];
     const surfaceIndex = collisionData[1][1];
 
@@ -644,13 +642,13 @@ function findAndResolveCollisions ( i : number, input : any
         dealWithWallCollision(i, newPosition, "r", surfaceIndex, input);
         break;
       case "g": // player landed on ground
-        dealWithGroundCollision(i, player[i].phys.grounded, newPosition, ecbpBottom, surfaceIndex, input);
+        dealWithGroundCollision(i, player[i].phys.grounded, newPosition, newECB[0], surfaceIndex, input);
         break;
       case "c": // player touching ceiling
-        dealWithCeilingCollision(i, newPosition, ecbOffset, input);
+        dealWithCeilingCollision(i, newPosition, newECB[2], input);
         break;
       case "p": // player landed on platform
-        dealWithPlatformCollision(i, player[i].phys.grounded, newPosition, ecbpBottom, surfaceIndex, input);
+        dealWithPlatformCollision(i, player[i].phys.grounded, newPosition, newECB[0], surfaceIndex, input);
         break;
       case "x": // corner collision
       case "n": // wall collision but player no longer in contact with wall
