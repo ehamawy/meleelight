@@ -293,8 +293,9 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
     if (! (lineSweepResult === null) ) {
 
       [t,s] = lineSweepResult;
+      const angularParameter = getAngularParameter ( t, same, other );
       console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across corner. Sweeping parameter s="+s+".");
-      return { kind : "corner", corner : corner, sweep : s, angular : t };
+      return { kind : "corner", corner : corner, sweep : s, angular : angularParameter };
     }
 
     else {
@@ -822,10 +823,19 @@ function findNextTargetFromSurface ( srcECB : ECB, ecbp : ECB, wall : [Vec2D, Ve
 
 function findNextTargetFromCorner ( srcECB : ECB, ecbp : ECB, corner : Vec2D, angularParameter : number) : ECB {
   const [same, other] = getSameAndOther(angularParameter);
-  const additionalPushout = (same === 1 || other === 1) ? (-additionalOffset) : additionalOffset;
-  const s = (corner.y - srcECB[same].y) / (ecbp[same].y - srcECB[same].y);
-  let tgtECB = interpolateECB(srcECB, ecbp, s);
-  tgtECB = moveECB(tgtECB, new Vec2D (corner.x - tgtECB[same].x + additionalPushout, 0));
+  const sign = (same === 1 || other === 1) ? "-" : "+";
+  const additionalPushout = sign === "-" ? (-additionalOffset) : additionalOffset;
+  let tgtECB;
+  if (    (sign === "+" && ecbp[same].x < corner.x) 
+       || (sign === "-" && ecbp[same].x > corner.x) ) {
+    const intercept = coordinateIntercept( hLineThrough(corner), [ecbp[same], ecbp[other]]);
+    tgtECB = moveECB( ecbp, new Vec2D (corner.x - intercept.x + additionalPushout, 0));
+  }
+  else {
+    const s = (corner.y - srcECB[same].y) / (ecbp[same].y - srcECB[same].y);
+    tgtECB = interpolateECB(srcECB, ecbp, s);
+    tgtECB = moveECB(tgtECB, new Vec2D (corner.x - tgtECB[same].x + additionalPushout, 0));
+  }
   return tgtECB;
 };
 
