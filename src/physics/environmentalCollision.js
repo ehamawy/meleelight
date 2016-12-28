@@ -168,17 +168,17 @@ function pointSweepingCheck ( ecb1 : ECB, ecbp : ECB, same : number
     const s = coordinateInterceptParameter (wall, [relevantECB1Point, relevantECBpPoint]); // need to put wall first
 
     if (s > 1 || s < 0 || isNaN(s) || s === Infinity) {
-      console.log("'pointSweepingCheck': no collision with "+wallType+" surface, sweeping parameter outside of allowable range.");
+      //console.log("'pointSweepingCheck': no collision with "+wallType+" surface, sweeping parameter outside of allowable range.");
       return null; // no collision
     }
     else {
       const intersection = new Vec2D (relevantECB1Point.x + s*(relevantECBpPoint.x-relevantECB1Point.x), relevantECB1Point.y + s*(relevantECBpPoint.y-relevantECB1Point.y));
       if (getXOrYCoord(intersection, xOrY) > getXOrYCoord(wallTopOrRight, xOrY) || getXOrYCoord(intersection, xOrY) < getXOrYCoord(wallBottomOrLeft, xOrY)) {
-        console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
+        //console.log("'pointSweepingCheck': no collision, intersection point outside of "+wallType+" surface.");
         return null; // no collision
       }
       else {
-        console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
+        //console.log("'pointSweepingCheck': collision, crossing relevant ECB point, "+wallType+" surface. Sweeping parameter s="+s+".");
         return { sweep : s, kind : "surface", surface : wall, type: wallType, index : wallIndex, pt : same } ;
       }
     }
@@ -276,17 +276,17 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
 
       [t,s] = lineSweepResult;
       const angularParameter = getAngularParameter ( t, same, other );
-      console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across corner. Sweeping parameter s="+s+".");
+      //console.log("'edgeSweepingCheck': collision, relevant edge of ECB has moved across corner. Sweeping parameter s="+s+".");
       return { kind : "corner", corner : corner, sweep : s, angular : angularParameter };
     }
 
     else {
-      console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross corner.");
+      //console.log("'edgeSweepingCheck': no edge collision, relevant edge of ECB does not cross corner.");
       return null;
     }
   }
   else {
-    console.log("'edgeSweepingCheck': no edge collision, corner did not switch relevant ECB edge sides.");
+    //console.log("'edgeSweepingCheck': no edge collision, corner did not switch relevant ECB edge sides.");
     return null;
   }
 };
@@ -379,7 +379,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
     // if the surface is a platform, and the bottom ECB point is below the platform, we shouldn't do anything
     if ( isPlatform ) {
       if ( !isOutside ( ecb1[same], wallTopOrRight, wallBottomOrLeft, wallType )) {
-        console.log("'findCollision': no collision, bottom ECB1 point was below p"+wallIndex+".");
+        //console.log("'findCollision': no collision, bottom ECB1 point was below p"+wallIndex+".");
         return null;
       }
     }
@@ -664,7 +664,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
                                             , labelledSurfaces );
 
   if (touchingDatum === null) {
-    console.log("'slideECB': sliding.");
+    //console.log("'slideECB': sliding.");
     return { event : "continue" };
   }
   else { 
@@ -676,7 +676,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
     if ( slidingAgainst.type === null ) {
       if ( collisionObject.kind === "surface" ) {
         if (collisionObject.type === "g" || collisionObject.type === "p") {
-          console.log("'slideECB': sliding interrupted by landing.");
+          //console.log("'slideECB': sliding interrupted by landing.");
           return { event : "end"
                  , finalECB : midECB
                  , touching : { kind : "surface"
@@ -687,7 +687,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
                  };
         }
         else {
-          console.log("'slideECB': beginning slide on surface.");
+          //console.log("'slideECB': beginning slide on surface.");
           return { event : "transfer"
                  , midECB : midECB
                  , object : { kind : "surface"
@@ -700,7 +700,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
         }
       }
       else {
-        console.log("'slideECB': beginning slide on corner.");
+        //console.log("'slideECB': beginning slide on corner.");
         return { event : "transfer"
                , midECB : midECB
                , object : { kind    : "corner"
@@ -713,9 +713,9 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
     else {
       const slidingType = slidingAgainst.type;
       if ( collisionObject.kind === "surface" ) {
-        const surfaceType = collisionObject.surface;        
+        const surfaceType = collisionObject.type;
         if ( slidingType === null || surfaceType === slidingType ) {
-          console.log("'slideECB': transferring slide to new surface.");
+          //console.log("'slideECB': transferring slide to new surface.");
           return { event : "transfer"
                  , midECB : midECB
                  , object : { kind : "surface"
@@ -727,7 +727,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
                  };
         }
         else {
-          console.log("'slideECB': interrupting sliding because of conflicting surface collision.");
+          //console.log("'slideECB': interrupting sliding because of conflicting surface collision.");
           return { event : "end"
                  , finalECB : midECB
                  , touching : { kind : "surface"
@@ -743,7 +743,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
         if ( slidingType === null 
              || (angularParameter <= 2 && slidingType === "l") 
              || ((angularParameter === 0 || angularParameter >=2) && slidingType === "r") ) {
-          console.log("'slideECB': transferring slide to new corner.");
+          //console.log("'slideECB': transferring slide to new corner.");
           return { event : "transfer"
                  , midECB : midECB, object : { kind : "corner"
                                              , corner  : collisionObject.corner
@@ -752,7 +752,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
                  };
         }
         else {
-          console.log("'slideECB': interrupting sliding because of conflicting corner collision.");
+          //console.log("'slideECB': interrupting sliding because of conflicting corner collision.");
           return { event : "end"
                  , finalECB : midECB
                  , touching : { kind : "corner"
