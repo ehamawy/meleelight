@@ -927,11 +927,12 @@ function inflateECB ( ecb : ECB, t : null | number
 
   const closestCollision = findClosestCollision( pointlikeECB, ecb
                                                , relevantSurfaces );
+  
   if (closestCollision === null) { 
-    return { location : null, factor : 1};
+    return { location : t, factor : 1};
   }
   else {
-    return { location : t, factor : Math.max(offset, closestCollision[1] - offset)}; // ECB angular parameter, sweeping parameter
+    return { location : t, factor : Math.max(offset, closestCollision.sweep - offset)}; // ECB angular parameter, sweeping parameter
   }
 }
 
@@ -940,10 +941,9 @@ function reinflateECB ( ecb : ECB, position : Vec2D
                       , oldecbSquashDatum : SquashDatum
                       ) : [Vec2D, SquashDatum, ECB] {
   let q = 1;
-  let angularParameter = null;
+  const angularParameter = oldecbSquashDatum.location;
   if (oldecbSquashDatum.factor < 1) {
-    q = 1 / oldecbSquashDatum.factor + additionalOffset/5;
-    angularParameter = oldecbSquashDatum.location;
+    q = 1 / oldecbSquashDatum.factor + additionalOffset/5;    
     const focus = ecbFocusFromAngularParameter(ecb, angularParameter);
     const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
                         , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
@@ -958,7 +958,7 @@ function reinflateECB ( ecb : ECB, position : Vec2D
 
   }
   else {
-    return [position, { location : null, factor : 1}, ecb];
+    return [position, { location : angularParameter, factor : 1}, ecb];
   }
 };
 
@@ -988,26 +988,22 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   // ABOVE: this is recomputed every frame and should be avoided
   // --------------------------------------------------------------
 
+  const allSurfacesMinusPlatforms = stageWalls.concat(stageGrounds).concat(stageCeilings);
   let relevantSurfaces = [];
-  let relevantSurfacesMinusPlatforms = [];
-
   switch (horizIgnore) {
     case "platforms":
-      relevantSurfacesMinusPlatforms = stageWalls.concat(stageGrounds).concat(stageCeilings);
-      relevantSurfaces = relevantSurfacesMinusPlatforms;      
+      relevantSurfaces = stageWalls.concat(stageGrounds).concat(stageCeilings);    
       break;
     case "none":
     default:
-      relevantSurfacesMinusPlatforms = stageWalls.concat(stageGrounds).concat(stageCeilings);
-      relevantSurfaces = relevantSurfacesMinusPlatforms.concat(stagePlatforms);
+      relevantSurfaces = stageWalls.concat(stageGrounds).concat(stageCeilings).concat(stagePlatforms);
       break;
     case "all":
       relevantSurfaces = stageWalls;
-      relevantSurfacesMinusPlatforms = relevantSurfaces;
       break;
   }
 
-  const resolution = resolveECB( ecb1, ecbp, relevantSurfaces);
+  const resolution = resolveECB( ecb1, ecbp, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
   let newSquashData = resolution.squash;
@@ -1025,10 +1021,13 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   }
 
   if (newSquashData.factor < 1 ) {
+    if (newSquashData.location === null) {
+      newSquashData.location = ecbSquashData.location;
+    }
     [ newPosition
     , newSquashData
-    , newECBp ] = reinflateECB( newECBp, newPosition                       
-                              , relevantSurfacesMinusPlatforms
+    , newECBp ] = reinflateECB( newECBp, newPosition
+                              , allSurfacesMinusPlatforms
                               , newSquashData
                               );
   } 
