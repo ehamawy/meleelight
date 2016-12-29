@@ -11,8 +11,10 @@ export class Vec2D { x : number; y : number;
   };
 };
 
-export function getXOrYCoord(vec : Vec2D, xOrY : number) : number {
-  if (xOrY === 0) {
+export type XOrY = "x" | "y";
+
+export function getXOrYCoord( vec : Vec2D, xOrY : XOrY ) : number {
+  if (xOrY === "x") {
     return vec.x;
   }
   else {
@@ -20,11 +22,15 @@ export function getXOrYCoord(vec : Vec2D, xOrY : number) : number {
   }
 };
 
-export function putXOrYCoord( coord : number, xOrY : number) : Vec2D {
-  if (xOrY === 0) {
+export function putXOrYCoord( coord : number, xOrY : XOrY ) : Vec2D {
+  if (xOrY === "x") {
     return ( new Vec2D ( coord, 0 ) );
   }
   else {
     return ( new Vec2D ( 0, coord ) );
   }
 };
+
+export function flipXOrY ( xOrY : XOrY ) : XOrY {
+  return xOrY === "x" ? "y" : "x";
+}

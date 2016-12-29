@@ -1,7 +1,7 @@
 // @flow
 /*eslint indent:1*/ // get stuffed
 
-import {Vec2D, getXOrYCoord, putXOrYCoord} from "../main/util/Vec2D";
+import {Vec2D, getXOrYCoord, putXOrYCoord, flipXOrY} from "../main/util/Vec2D";
 import {dotProd, scalarProd, add, subtract, norm, orthogonalProjection} from "../main/linAlg";
 import {findSmallestWithin, pickSmallestPointSweep} from "../main/util/findSmallestWithin";
 import {solveQuadraticEquation} from "../main/util/solveQuadraticEquation";
@@ -14,6 +14,8 @@ import {zipLabels} from "../main/util/zipLabels";
 import type {ECB, SquashDatum} from "../main/util/ecbTransform";
 // eslint-disable-next-line no-duplicate-imports
 import type {Stage, LabelledSurface} from "../stages/stage";
+// eslint-disable-next-line no-duplicate-imports
+import type {XOrY} from "../main/util/Vec2D";
 
 
 // for debugging, draw ECBs and points on top of everything else
@@ -55,8 +57,8 @@ function vLineThrough ( point : Vec2D ) : [Vec2D, Vec2D] {
 };
 
 // either horizontal or vertical line through a point
-function lineThrough ( point : Vec2D, xOrY : number ) : [Vec2D, Vec2D] {
-  if (xOrY === 0) {
+function lineThrough ( point : Vec2D, xOrY : XOrY ) : [Vec2D, Vec2D] {
+  if (xOrY === "x") {
     return hLineThrough(point);
   }
   else {
@@ -152,12 +154,12 @@ function runPointSweep ( ecb1 : ECB, ecbp : ECB, same : number
   let wallBottomOrLeft;
   let wallTopOrRight;
   if (wallType === "l" || wallType === "r") {
-    xOrY = 1;
+    xOrY = "y";
     wallBottomOrLeft = extremePoint(wall, "b");
     wallTopOrRight   = extremePoint(wall, "t");
   }
   else {
-    xOrY = 0;
+    xOrY = "x";
     wallBottomOrLeft = extremePoint(wall, "l");
     wallTopOrRight   = extremePoint(wall, "r");
   }
@@ -182,7 +184,7 @@ function pointSweepingCheck ( ecb1 : ECB, ecbp : ECB, pt : number
                             , wall : [Vec2D, Vec2D], wallType : string, wallIndex : number
                             , wallTopOrRight : Vec2D
                             , wallBottomOrLeft : Vec2D
-                            , xOrY : number ) : null | PointSweepResult {
+                            , xOrY : XOrY ) : null | PointSweepResult {
 
   if ( !isOutside(ecb1[pt], wallTopOrRight, wallBottomOrLeft, wallType) || isOutside(ecbp[pt], wallTopOrRight, wallBottomOrLeft, wallType) ) {
     return null; // ECB did not cross the surface in the direction it can stop the ECB
@@ -350,7 +352,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
   let wallTopOrRight = wallTop;
   let wallBottomOrLeft = wallBottom;
   let same = 3;
-  let xOrY = 1; // y by default
+  let xOrY = "y";
   let isPlatform = false;
   let flip = false;
   let sign = 1;
@@ -370,7 +372,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
       same = 0;
       wallTopOrRight  = wallRight;
       wallBottomOrLeft = wallLeft;
-      xOrY = 0;
+      xOrY = "x";
       flip = true;
       sign = -1;
       break;
@@ -380,7 +382,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
       same = 2;
       wallTopOrRight  = wallRight;
       wallBottomOrLeft = wallLeft;
-      xOrY = 0;
+      xOrY = "x";
       break;
     default: // right wall by default
       break;
@@ -556,21 +558,21 @@ function findClosestCollision( ecb1 : ECB, ecbp : ECB
   const collisionData = labelledSurfaces.map(
           (labelledSurface) => findCollision ( ecb1, ecbp, labelledSurface ) );
   for (let i = 0; i < collisionData.length; i++) {
-    const thisData = collisionData[i];
-    if (thisData !== null) {
-      if (thisData.kind === "surface") {
-        touchingData.push( { sweep : thisData.sweep, object : { kind : "surface"
-                                                              , surface : thisData.surface
-                                                              , type : thisData.type
-                                                              , index : thisData.index
-                                                              , pt : thisData.pt
-                                                              } } );
+    const collisionDatum = collisionData[i];
+    if (collisionDatum !== null) {
+      if (collisionDatum.kind === "surface") {
+        touchingData.push( { sweep : collisionDatum .sweep, object : { kind : "surface"
+                                                                   , surface : collisionDatum.surface
+                                                                   , type : collisionDatum.type
+                                                                   , index : collisionDatum.index
+                                                                   , pt : collisionDatum.pt
+                                                                   } } );
       }
-      else if (thisData.kind === "corner") {
-        touchingData.push( { sweep : thisData.sweep, object : { kind : "corner"
-                                                              , corner : thisData.corner
-                                                              , angular : thisData.angular 
-                                                              } } );
+      else if (collisionDatum.kind === "corner") {
+        touchingData.push( { sweep : collisionDatum.sweep, object : { kind : "corner"
+                                                                    , corner : collisionDatum.corner
+                                                                    , angular : collisionDatum.angular 
+                                                                    } } );
       }
     }
   }
@@ -809,7 +811,7 @@ function findNextTargetFromSurface ( srcECB : ECB, ecbp : ECB, wall : [Vec2D, Ve
 
   const sign = (wallType === "l" || wallType === "c") ? -1 : 1;
   const additionalPushout = sign * additionalOffset;
-  const xOrY = (wallType === "l" || wallType === "r") ? 0 : 1;
+  const xOrY = (wallType === "l" || wallType === "r") ? "x" : "y";
 
   if (wallType === "c") {
     const wallLeft = extremePoint(wall, "l");
@@ -886,7 +888,7 @@ function findNextTargetFromCorner ( srcECB : ECB, ecbp : ECB, corner : Vec2D, an
     final = false;
   }
 
-  tgtECB = moveECB(tgtECB, putXOrYCoord(pushout + additionalPushout, 0));
+  tgtECB = moveECB(tgtECB, putXOrYCoord(pushout + additionalPushout, "x"));
 
   drawECB(ecbp  , "#1098c9");
   drawECB(tgtECB, "#5cbc12");
@@ -901,9 +903,9 @@ function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : nul
     return ecbp;
   }
   else {
-    const xOrY = (slidingType === "l" || slidingType === "r") ? 0 : 1;
+    const xOrY = (slidingType === "l" || slidingType === "r") ? "x" : "y";
     let pushout = 0;
-    if ( getXOrYCoord(startECB[pt], 1-xOrY) === getXOrYCoord(ecbp[pt], 1-xOrY) ) {
+    if ( getXOrYCoord(startECB[pt], flipXOrY(xOrY)) === getXOrYCoord(ecbp[pt], flipXOrY(xOrY)) ) {
       pushout = getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY);
     }
     else {
@@ -1007,11 +1009,11 @@ function reinflateECB ( ecb : ECB, position : Vec2D
                         , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
                         , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
                         ];
-    const ecbSquashData = inflateECB (fullsizeecb, angularParameter, relevantSurfaces);    
-    const squashedecb = squashECBAt(fullsizeecb, ecbSquashData);
+    const ecbSquashDatum = inflateECB (fullsizeecb, angularParameter, relevantSurfaces);    
+    const squashedecb = squashECBAt(fullsizeecb, ecbSquashDatum);
     const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
                                  , position.y );
-    return [newPosition, ecbSquashData, squashedecb];
+    return [newPosition, ecbSquashDatum, squashedecb];
 
   }
   else {
@@ -1025,7 +1027,7 @@ function reinflateECB ( ecb : ECB, position : Vec2D
 
 // this function initialises necessary data and then calls the main collision routine loop
 export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
-                                   , ecbSquashData : SquashDatum
+                                   , ecbSquashDatum : SquashDatum
                                    , horizIgnore : string
                                    , stage : Stage
                                    ) : [ Vec2D // new position
@@ -1063,8 +1065,8 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   const resolution = resolveECB( ecb1, ecbp, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
-  let newSquashData = resolution.squash;
-  newSquashData.factor *= ecbSquashData.factor;
+  let newSquashDatum = resolution.squash;
+  newSquashDatum.factor *= ecbSquashDatum.factor;
   let newPosition = subtract(add(position, newECBp[0]), ecbp[0]);
 
   let collisionLabel = null;
@@ -1077,18 +1079,18 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
     }
   }
 
-  if (newSquashData.factor < 1 ) {
-    if (newSquashData.location === null) {
-      newSquashData.location = ecbSquashData.location;
+  if (newSquashDatum.factor < 1 ) {
+    if (newSquashDatum.location === null) {
+      newSquashDatum.location = ecbSquashDatum.location;
     }
     [ newPosition
-    , newSquashData
+    , newSquashDatum
     , newECBp ] = reinflateECB( newECBp, newPosition
                               , allSurfacesMinusPlatforms
-                              , newSquashData
+                              , newSquashDatum
                               );
   } 
 
-  return [ newPosition, collisionLabel, newSquashData, newECBp ];
+  return [ newPosition, collisionLabel, newSquashDatum, newECBp ];
 
 };
