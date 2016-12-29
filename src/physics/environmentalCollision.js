@@ -621,27 +621,35 @@ type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchin
                 | { event : "continue" }
 
 function resolveECB ( ecb1 : ECB, ecbp : ECB, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
-  return sliders( ecb1, ecbp, ecbp, labelledSurfaces, null, { type : null, angular : null } );  
+  return sliders( ecb1, ecbp, ecbp, labelledSurfaces, null, { type : null, angular : null }, true );  
 }
 
 function sliders( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                 , labelledSurfaces : Array<LabelledSurface>
                 , oldTouchingDatum : null | SimpleTouchingDatum
-                , slidingAgainst : Sliding ) : ECBTouching {
+                , slidingAgainst : Sliding
+                , final : bool ) : ECBTouching {
   const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst );
+  let newECBp = ecbp;
   if (slideDatum.event === "end") {
     return { ecb : slideDatum.finalECB, squash : { factor : 1, location : null}, touching : slideDatum.touching };
   }
   else if (slideDatum.event === "continue") {
-    return { ecb : tgtECB, squash : { factor : 1, location : null}, touching : oldTouchingDatum };
+    if (final) {
+      return { ecb : tgtECB, squash : { factor : 1, location : null}, touching : oldTouchingDatum };
+    }
+    else {
+      newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
+      return sliders ( tgtECB, newECBp, newECBp, labelledSurfaces, oldTouchingDatum, slidingAgainst, true);
+    }
   }
   else { // transfer
     const newSrcECB = slideDatum.midECB;
-    const slideObject = slideDatum.object;
-    const newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, 0 );
+    const slideObject = slideDatum.object;    
 
     let newTouchingDatum;
     let angular;
+    let newFinal;
     let newTgtECB;
     let newSlidingType = null;
 
@@ -652,8 +660,9 @@ function sliders( srcECB : ECB, tgtECB : ECB, ecbp : ECB
         newSlidingType = surfaceType;
       }
       angular = slideObject.pt;
+      newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, angular );
       newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : angular };
-      newTgtECB = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, angular );
+      [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, angular );
     }
     else {
       const corner = slideObject.corner;
@@ -664,14 +673,17 @@ function sliders( srcECB : ECB, tgtECB : ECB, ecbp : ECB
       else if (angular > 2) {
         newSlidingType = "r";
       }
-      newTgtECB = findNextTargetFromCorner ( newSrcECB, newECBp, corner, angular );
+      const [same, other] = getSameAndOther(angular);
+      newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, same );
+      [newTgtECB, newFinal] = findNextTargetFromCorner ( newSrcECB, newECBp, corner, angular );
       newTouchingDatum = { kind : "corner", angular : angular };
     }
     return sliders ( newSrcECB, newTgtECB, newECBp
                    , labelledSurfaces
                    , newTouchingDatum
                    , { type : newSlidingType
-                     , angular : angular } );
+                     , angular : angular }
+                   , newFinal );
   }
 };
 
@@ -689,7 +701,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
 
   if (touchingDatum === null) {
     //console.log("'slideECB': sliding.");
-    return { event : "continue" };
+    return { event : "continue"};
   }
   else { 
     const s = touchingDatum.sweep;
@@ -788,86 +800,117 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
   }
 };
 
-function findNextTargetFromSurface ( srcECB : ECB, ecbp : ECB, wall : [Vec2D, Vec2D], wallType : string, pt : number ) : ECB {
+function findNextTargetFromSurface ( srcECB : ECB, ecbp : ECB, wall : [Vec2D, Vec2D], wallType : string, pt : number ) : [ECB, bool] {
   let wallForward;
-  let s;
-  let tgtECB;
+  let s = 1;
+  let tgtECB = ecbp;
+  let pushout = 0;
+  let final = true;
+
+  const sign = (wallType === "l" || wallType === "c") ? -1 : 1;
+  const additionalPushout = sign * additionalOffset;
+  const xOrY = (wallType === "l" || wallType === "r") ? 0 : 1;
+
   if (wallType === "c") {
     const wallLeft = extremePoint(wall, "l");
     const wallRight = extremePoint(wall, "r");
     if (ecbp[2].x <= wallRight.x && ecbp[2].x >= wallLeft.x) {
       const intercept = coordinateIntercept(vLineThrough(ecbp[2]), wall);
-      tgtECB = moveECB( ecbp, new Vec2D (0, intercept.y - ecbp[2].y - additionalOffset ));
+      pushout = intercept.y - ecbp[2].y;
     }
     else {
       wallForward = ecbp[2].x < srcECB[2].x ? wallLeft : wallRight;
       s = (wallForward.x - srcECB[2].x) / (ecbp[2].x - srcECB[2].x);
+      s = Math.min(Math.max(s,0), 1);
       tgtECB = interpolateECB(srcECB, ecbp, s);
-      tgtECB = moveECB(tgtECB, new Vec2D ( 0, wallForward.y - tgtECB[2].y - additionalOffset ) );
+      pushout = wallForward.y - tgtECB[2].y;
     }
   }
   else {
     const wallBottom = extremePoint(wall, "b");
     const wallTop = extremePoint(wall, "t");
-    const additionalPushout = (wallType === "l") ? (-additionalOffset) : additionalOffset;
     if (ecbp[pt].y <= wallTop.y && ecbp[pt].y >= wallBottom.y) {
       const intercept = coordinateIntercept(hLineThrough(ecbp[pt]), wall);
-      tgtECB = moveECB( ecbp, new Vec2D( intercept.x - ecbp[pt].x + additionalPushout, 0));
+      pushout = intercept.x - ecbp[pt].x;
     }
     else {
       wallForward = ecbp[pt].y < srcECB[pt].y ? wallBottom : wallTop;
       s = (wallForward.y - srcECB[pt].y) / (ecbp[pt].y - srcECB[pt].y);
+      s = Math.min(Math.max(s,0), 1);
       tgtECB = interpolateECB(srcECB, ecbp, s);
-      tgtECB = moveECB(tgtECB, new Vec2D ( wallForward.x - tgtECB[pt].x + additionalPushout, 0 ) );
+      pushout = wallForward.x - tgtECB[pt].x;
     }
   }
 
+  if (s < 1 || sign * pushout < 0 ) {
+    final = false;
+  }
+
+  tgtECB = moveECB(tgtECB, putXOrYCoord(pushout + additionalPushout, xOrY));
+
   drawECB(ecbp  , "#8f54ff");
   drawECB(tgtECB, "#35f4ab");
-  return tgtECB;
+
+  return [tgtECB, final];
 };
 
-function findNextTargetFromCorner ( srcECB : ECB, ecbp : ECB, corner : Vec2D, angularParameter : number) : ECB {
+function findNextTargetFromCorner ( srcECB : ECB, ecbp : ECB, corner : Vec2D, angularParameter : number) : [ECB, bool] {
   const [same, other] = getSameAndOther(angularParameter);
   const LRSign = (same  === 1) ? -1 : 1;
   const UDSign = (other === 2) ? -1 : 1;
   const additionalPushout = LRSign * additionalOffset;
 
   let tgtECB = ecbp;
+  let s = 1;
   let pushout = 0;
+  let final = true;
 
   if ( UDSign * ecbp[same].y < UDSign * corner.y ) {
-    const s = (corner.y - srcECB[same].y) / (ecbp[same].y - srcECB[same].y);
+    s = (corner.y - srcECB[same].y) / (ecbp[same].y - srcECB[same].y);
+    s = Math.min(Math.max(s,0), 1);
     tgtECB = interpolateECB(srcECB, ecbp, s);
-    tgtECB = moveECB(tgtECB, new Vec2D (corner.x - tgtECB[same].x + additionalPushout, 0));
+    pushout = corner.x - tgtECB[same].x;
   }
   else if ( UDSign * ecbp[other].y < UDSign * corner.y ) {
     const intercept = coordinateIntercept( hLineThrough(corner), [ecbp[same], ecbp[other]]);
-    tgtECB = moveECB(tgtECB, new Vec2D (corner.x - intercept.x + additionalPushout, 0));
+    pushout = corner.x - intercept.x + additionalPushout;
   }
   else {
-    const s = (corner.y - srcECB[other].y) / (ecbp[other].y - srcECB[other].y);
+    s = (corner.y - srcECB[other].y) / (ecbp[other].y - srcECB[other].y);
+    s = Math.min(Math.max(s,0), 1);
     tgtECB = interpolateECB(srcECB, ecbp, s);
-    tgtECB = moveECB(tgtECB, new Vec2D(corner.x - tgtECB[other].x + additionalPushout, 0));
     pushout = corner.x - tgtECB[other].x;
   }
+
+  if (s < 1 || LRSign * pushout < 0) {
+    final = false;
+  }
+
+  tgtECB = moveECB(tgtECB, putXOrYCoord(pushout + additionalPushout, 0));
 
   drawECB(ecbp  , "#1098c9");
   drawECB(tgtECB, "#5cbc12");
   drawPoint(corner, "#ffc23f");
-  return tgtECB;
+
+  return [tgtECB, final];
 
 };
 
-function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, pt : number ) : ECB {
-  if (startECB[pt].x === ecbp[pt].x && startECB[pt].y === ecbp[pt].y) {
+function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : null | string, pt : number ) : ECB {
+  if (slidingType === null) {
     return ecbp;
   }
   else {
-    const mov = subtract( endECB[pt], startECB[pt] );
-    const projectedVec = subtract( orthogonalProjection( endECB[pt], [startECB[pt], ecbp[pt]] ), startECB[pt] );
-    const complement = subtract( mov, projectedVec );
-    return moveECB(ecbp, complement);
+    const xOrY = (slidingType === "l" || slidingType === "r") ? 0 : 1;
+    let pushout = 0;
+    if ( getXOrYCoord(startECB[pt], 1-xOrY) === getXOrYCoord(ecbp[pt], 1-xOrY) ) {
+      pushout = getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY);
+    }
+    else {
+      const intercept = coordinateIntercept(lineThrough(endECB[pt], xOrY), [startECB[pt], ecbp[pt]]);
+      pushout = getXOrYCoord(intercept, xOrY) - getXOrYCoord(endECB[pt], xOrY);
+    }
+    return moveECB(ecbp, putXOrYCoord(pushout, xOrY));
   }
 };
 
