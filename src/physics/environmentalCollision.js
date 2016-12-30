@@ -43,6 +43,8 @@ function drawPoint( point : Vec2D, color : string) : void {
 
 export const additionalOffset : number = 0.00001;
 
+const maxRecursion = 30;
+
 // -----------------------------------------------------
 // various utility functions
 
@@ -524,69 +526,81 @@ type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchin
                 | { event : "continue" }
 
 function resolveECB ( ecb1 : ECB, ecbp : ECB, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
-  return runSlideRoutine( ecb1, ecbp, ecbp, labelledSurfaces, null, { type : null, angular : null }, true );  
+  return runSlideRoutine( ecb1, ecbp, ecbp, labelledSurfaces, null, { type : null, angular : null }, true, 0 );  
 }
 
 function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                         , labelledSurfaces : Array<LabelledSurface>
                         , oldTouchingDatum : null | SimpleTouchingDatum
                         , slidingAgainst : Sliding
-                        , final : bool ) : ECBTouching {
-  const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst );
-  let newECBp = ecbp;
-  if (slideDatum.event === "end") {
-    return { ecb : slideDatum.finalECB, squash : { factor : 1, location : null}, touching : slideDatum.touching };
+                        , final : bool
+                        , recursionCounter : number ) : ECBTouching {
+  if (recursionCounter > maxRecursion) {
+    console.log("'runSlideRoutine': excessive recursion, aborting.");
+    drawECB(srcECB, "#286ee0");
+    drawECB(tgtECB, "#f49930");
+    drawECB(ecbp, "#fff9ad");
+    return { ecb : ecbp, squash : { factor : 1, location : null}, touching : null };
   }
-  else if (slideDatum.event === "continue") {
-    if (final) {
-      return { ecb : tgtECB, squash : { factor : 1, location : null}, touching : oldTouchingDatum };
+  else {
+    const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst );
+    let newECBp = ecbp;
+  
+    if (slideDatum.event === "end") {
+      return { ecb : slideDatum.finalECB, squash : { factor : 1, location : null}, touching : slideDatum.touching };
     }
-    else {
-      newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
-      return runSlideRoutine ( tgtECB, newECBp, newECBp, labelledSurfaces, oldTouchingDatum, slidingAgainst, true);
-    }
-  }
-  else { // transfer
-    const newSrcECB = slideDatum.midECB;
-    const slideObject = slideDatum.object;    
-
-    let newTouchingDatum;
-    let angular;
-    let newFinal;
-    let newTgtECB;
-    let newSlidingType = null;
-
-    if ( slideObject.kind === "surface" ) {
-      const surface = slideObject.surface;
-      const surfaceType = slideObject.type;
-      if (surfaceType === "l" || surfaceType === "r" || surfaceType === "c") {
-        newSlidingType = surfaceType;
+    else if (slideDatum.event === "continue") {
+      if (final) {
+        return { ecb : tgtECB, squash : { factor : 1, location : null}, touching : oldTouchingDatum };
       }
-      angular = slideObject.pt;
-      newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, angular );
-      newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : angular };
-      [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, angular );
-    }
-    else {
-      const corner = slideObject.corner;
-      angular = slideObject.angular;
-      if (angular < 2 && angular > 0) {
-        newSlidingType = "l";
+      else {
+        newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
+        return runSlideRoutine ( tgtECB, newECBp, newECBp, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
       }
-      else if (angular > 2) {
-        newSlidingType = "r";
-      }
-      const [same, other] = getSameAndOther(angular);
-      newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, same );
-      [newTgtECB, newFinal] = findNextTargetFromCorner ( newSrcECB, newECBp, corner, angular );
-      newTouchingDatum = { kind : "corner", angular : angular };
     }
-    return runSlideRoutine ( newSrcECB, newTgtECB, newECBp
-                           , labelledSurfaces
-                           , newTouchingDatum
-                           , { type : newSlidingType
-                             , angular : angular }
-                           , newFinal );
+    else { // transfer
+      const newSrcECB = slideDatum.midECB;
+      const slideObject = slideDatum.object;    
+  
+      let newTouchingDatum;
+      let angular;
+      let newFinal;
+      let newTgtECB;
+      let newSlidingType = null;
+  
+      if ( slideObject.kind === "surface" ) {
+        const surface = slideObject.surface;
+        const surfaceType = slideObject.type;
+        if (surfaceType === "l" || surfaceType === "r" || surfaceType === "c") {
+          newSlidingType = surfaceType;
+        }
+        angular = slideObject.pt;
+        newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, angular );
+        newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : angular };
+        [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, angular );
+      }
+      else {
+        const corner = slideObject.corner;
+        angular = slideObject.angular;
+        if (angular < 2 && angular > 0) {
+          newSlidingType = "l";
+        }
+        else if (angular > 2) {
+          newSlidingType = "r";
+        }
+        const [same, other] = getSameAndOther(angular);
+        newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, same );
+        [newTgtECB, newFinal] = findNextTargetFromCorner ( newSrcECB, newECBp, corner, angular );
+        newTouchingDatum = { kind : "corner", angular : angular };
+      }
+      return runSlideRoutine ( newSrcECB, newTgtECB, newECBp
+                             , labelledSurfaces
+                             , newTouchingDatum
+                             , { type : newSlidingType
+                               , angular : angular }
+                             , newFinal
+                             , recursionCounter + 1 );
+    }
   }
 };
 
