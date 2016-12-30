@@ -17,9 +17,10 @@ export let targetBuilder = 0;
 export let targetTool = 0;
 export let showingCode = false;
 export let toolInfoTimer = 0;
-export let toolInfo = ["Box","Platform","Ledge","Target","Move","Delete"];
+export let toolInfo = ["Polygon","Platform","Ledge","Target","Move","Delete"];
 export let holdingA = false;
-export let drawingBox = new Box2D([0,0],[0,0]);
+export let amDrawingPolygon = false;
+export let drawingPolygon = [];
 export let drawingPlatform = [new Vec2D(0,0),new Vec2D(0,0)];
 export let editingStage = -1;
 
@@ -28,6 +29,7 @@ export let tooSmallPos = new Vec2D(0,0);
 
 export var stageTemp = {
   box : [],
+  polygon : [],
   platform : [],
   ground : [],
   ceiling : [],
@@ -40,6 +42,7 @@ export var stageTemp = {
   scale : 3,
   offset : [600,375],
   draw : {
+    polygon : [],
     box : [],
     platform : [],
     ground : [],
@@ -317,46 +320,120 @@ export function targetBuilderControls (p, input){
       }
       switch (targetTool) {
         case 0:
-          //BOX
-          if (!holdingA) {
-            if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
-              // initiate build
-              if (stageTemp.box.length < 120) {
-                drawingBox.min = new Vec2D(realCrossHair.x, realCrossHair.y);
-                drawingBox.max = new Vec2D(realCrossHair.x, realCrossHair.y);
-                holdingA = true;
+          //POLYGON
+          if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
+            // initiate build
+            if (!amDrawingPolygon) {
+              if (stageTemp.polygon.length < 120) {
+                drawingPolygon = [new Vec2D(realCrossHair.x, realCrossHair.y), new Vec2D(realCrossHair.x, realCrossHair.y)];
+                amDrawingPolygon = true;
+                sounds.blunthit.play();
               } else {
                 sounds.deny.play();
+                break;
+              }
+            } else {
+              //RELEASE
+              drawingPolygon[drawingPolygon.length-1] = new Vec2D(realCrossHair.x,realCrossHair.y);
+              sounds.blunthit.play();
+              // if close enough to start of polygon
+              if (Math.abs(realCrossHair.x-drawingPolygon[0].x) < 2 && Math.abs(realCrossHair.y-drawingPolygon[0].y) < 2) {
+                amDrawingPolygon = false;
+                // if has enough sides, start building walls
+                if (drawingPolygon.length >= 3){
+                  var topPoint = 0;
+                  // find top point, also make polygon objects while we are looping
+                  stageTemp.draw.polygon.push([]);
+                  stageTemp.polygon.push([]);
+                  for (let i=0;i<drawingPolygon.length;i++){
+                    if (drawingPolygon[i].y > drawingPolygon[topPoint].y) {
+                      topPoint = i;
+                    }
+                    stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
+                    stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
+                  }
+                  let direction = 1;
+                  // find index direction of clockwise
+                  // if point before top point is further right than the point after, change direction
+                  if (drawingPolygon[(topPoint === 0) ? drawingPolygon.length-1 : (topPoint-1)].x > drawingPolygon[(topPoint === drawingPolygon.length-1) ? 0 : (topPoint+1)].x) {
+                    direction = -1;
+                  }
+                  // loop through polygon and determine type
+                  let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
+                  //console.log(direction);
+                  for (let i=0;i<drawingPolygon.length;i++){
+                    let nextIndex = curIndex + direction;
+                    if (nextIndex === -1) {
+                      nextIndex = drawingPolygon.length - 1;
+                    } else if (nextIndex === drawingPolygon.length){
+                      nextIndex = 0;
+                    }
+                    //console.log("cur: "+curIndex);
+                    //console.log("next: "+nextIndex);
+                    //console.log("____________");
+                    let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
+                    let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
+                    let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
+                    if (Math.sign(angle) === -1) {
+                      angle += twoPi;
+                    }
+                    //console.log(angle);
+
+
+
+                    /*if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
+                      // is ground
+                      stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+
+                    } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
+                      // is ceiling
+                      stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                   } else if (angle > Math.PI) {
+                      // is wallR
+                      stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                    } else {
+                      // is wallL
+                      stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                    }*/
+                    if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
+                      // is ceiling
+                      stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                    } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
+                      // is ground
+                      stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+
+                    } else if (angle > Math.PI) {
+                      // is wallL
+                      stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                    } else {
+                      // is wallR
+                      stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                      stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                    }
+
+                    curIndex = nextIndex;
+                  }
+                  drawingPolygon = [];
+                  //undoList.push("box");
+                } else {
+                  tooSmallTimer = 60;
+                  tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
+                }
+              } else {
+                // continue drawing more points
+                drawingPolygon.push(new Vec2D(realCrossHair.x, realCrossHair.y));
               }
             }
           } else {
-            if (input[p][0].a) {
-              // stretch
-              drawingBox.max = new Vec2D(realCrossHair.x, realCrossHair.y);
-            } else {
-              //RELEASE
-              drawingBox.max = new Vec2D(realCrossHair.x,realCrossHair.y);
-              if (Math.abs(drawingBox.min.x-drawingBox.max.x) >= 3.73*3 && Math.abs(drawingBox.min.y-drawingBox.max.y) >= 2.8*3){
-                stageTemp.draw.box.push(new Box2D([Math.min(drawingBox.min.x,drawingBox.max.x),Math.max(drawingBox.min.y,drawingBox.max.y)],[Math.max(drawingBox.min.x,drawingBox.max.x),Math.min(drawingBox.min.y,drawingBox.max.y)]));
-                let b = stageTemp.draw.box[stageTemp.draw.box.length-1];
-                stageTemp.draw.ground.push([new Vec2D(b.min.x,b.max.y),new Vec2D(b.max.x,b.max.y)]);
-                stageTemp.draw.ceiling.push([new Vec2D(b.min.x,b.min.y),new Vec2D(b.max.x,b.min.y)]);
-                stageTemp.draw.wallL.push([new Vec2D(b.min.x,b.max.y),new Vec2D(b.min.x,b.min.y)]);
-                stageTemp.draw.wallR.push([new Vec2D(b.max.x,b.max.y),new Vec2D(b.max.x,b.min.y)]);
-
-                stageTemp.box.push(new Box2D([(Math.min(drawingBox.min.x,drawingBox.max.x)-600)/3,(Math.max(drawingBox.min.y,drawingBox.max.y)-375)/-3],[(Math.max(drawingBox.min.x,drawingBox.max.x)-600)/3,(Math.min(drawingBox.min.y,drawingBox.max.y)-375)/-3]));
-                 b = stageTemp.box[stageTemp.box.length-1];
-                stageTemp.ground.push([new Vec2D(b.min.x,b.max.y),new Vec2D(b.max.x,b.max.y)]);
-                stageTemp.ceiling.push([new Vec2D(b.min.x,b.min.y),new Vec2D(b.max.x,b.min.y)]);
-                stageTemp.wallL.push([new Vec2D(b.min.x,b.max.y),new Vec2D(b.min.x,b.min.y)]);
-                stageTemp.wallR.push([new Vec2D(b.max.x,b.max.y),new Vec2D(b.max.x,b.min.y)]);
-                undoList.push("box");
-              } else {
-                tooSmallTimer = 60;
-                tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
-              }
-              holdingA = false;
-              sounds.blunthit.play();
+            if (amDrawingPolygon){
+              drawingPolygon[drawingPolygon.length-1] = new Vec2D(realCrossHair.x, realCrossHair.y);
             }
           }
           break;
@@ -633,9 +710,15 @@ export function targetBuilderControls (p, input){
 
 export function drawTargetStage (){
   ui.fillStyle = boxFill;
-  for (let i=0;i<stageTemp.draw.box.length;i++){
-    let b = stageTemp.draw.box[i];
-    ui.fillRect(b.min.x,b.max.y,Math.abs(b.max.x-b.min.x),Math.abs(b.max.y-b.min.y));
+  for (let i=0;i<stageTemp.draw.polygon.length;i++){
+    let p = stageTemp.draw.polygon[i];
+    ui.beginPath();
+    ui.moveTo(p[0].x,p[0].y);
+    for (let n=1;n<p.length;n++) {
+      ui.lineTo(p[n].x,p[n].y);
+    }
+    ui.closePath();
+    ui.fill();
   }
   for (let i=0;i<stageTemp.draw.target.length;i++){
     let x = stageTemp.draw.target[i].x;
@@ -742,14 +825,24 @@ export function renderTargetBuilder (){
     ui.stroke();
   }
   drawTargetStage();
+  if (amDrawingPolygon){
+    ui.strokeStyle = "white";
+    ui.lineWidth = 4;
+    ui.beginPath();
+    ui.moveTo(drawingPolygon[0].x,drawingPolygon[0].y);
+    for (let n=1;n<drawingPolygon.length;n++){
+      ui.lineTo(drawingPolygon[n].x,drawingPolygon[n].y);
+    }
+    ui.stroke();
+  }
   if (holdingA) {
     switch (targetTool) {
       case 0:
         //BOX
-        ui.strokeStyle = "white";
+        /*ui.strokeStyle = "white";
         ui.lineWidth = 4;
         ui.strokeRect(Math.min(drawingBox.min.x, drawingBox.max.x), Math.min(drawingBox.min.y, drawingBox.max.y),
-          Math.abs(drawingBox.min.x - drawingBox.max.x), Math.abs(drawingBox.min.y - drawingBox.max.y));
+          Math.abs(drawingBox.min.x - drawingBox.max.x), Math.abs(drawingBox.min.y - drawingBox.max.y));*/
         break;
       case 1:
         //PLATFORM

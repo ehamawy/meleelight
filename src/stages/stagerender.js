@@ -207,6 +207,16 @@ export function drawStage() {
       for (var j = 0; j < activeStage.box.length; j++) {
         fg2.fillRect((activeStage.box[j].min.x * activeStage.scale) + activeStage.offset[0], (activeStage.box[j].max.y * -activeStage.scale) + activeStage.offset[1], (activeStage.box[j].max.x - activeStage.box[j].min.x) * activeStage.scale, (activeStage.box[j].max.y - activeStage.box[j].min.y) * activeStage.scale);
       }
+      for (let j=0;j<activeStage.polygon.length;j++){
+        let p = activeStage.polygon[j];
+        fg2.beginPath();
+        fg2.moveTo(p[0].x,p[0].y);
+        for (let n=1;n<p.length;n++) {
+          fg2.lineTo(p[n].x,p[n].y);
+        }
+        fg2.closePath();
+        fg2.fill();
+      }
     }
 
     fg2.strokeStyle = "#e7a44c";
