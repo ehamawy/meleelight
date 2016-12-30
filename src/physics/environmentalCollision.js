@@ -172,6 +172,13 @@ function runPointSweep ( ecb1 : ECB, ecbp : ECB, same : number
     const botResult  = pointSweepingCheck(ecb1, ecbp, 0   , wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, xOrY);
     result = pickSmallestPointSweep([sameResult, topResult, botResult]);
   }
+  else if (wallType === "c") {
+    const wallAngle = lineAngle([wallBottomOrLeft, wallTopOrRight]);
+    const side = wallAngle < Math.PI/2 ? 3 : 1;
+    const topResult  = pointSweepingCheck(ecb1, ecbp, 2   , wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, xOrY);
+    const sideResult = pointSweepingCheck(ecb1, ecbp, side, wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, xOrY);
+    result = pickSmallestPointSweep([topResult, sideResult]);
+  }
   else {
     result = pointSweepingCheck(ecb1, ecbp, same, wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, xOrY);
   }
@@ -334,8 +341,8 @@ type CollisionDatum = null | PointSweepResult | EdgeSweepResult
 function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurface ) : CollisionDatum {
 
 // STANDING ASSUMPTIONS
-// the ECB can only collide a ground/platform surface on its bottom point (or a bottom edge on a corner of the ground/platform)
-// the ECB can only collide a ceiling surface on its top point (or a top edge on a corner)
+// the ECB can only collide a ground/platform surface on its bottom point (or a bottom edge)
+// the ECB can only collide a ceiling surface on a top or side point (or a top edge)
 // the ECB cannot collide a left wall on its left vertex
 // the ECB cannot collide a right wall on its right vertex
 // walls and corners push out horizontally, grounds/ceilings/platforms push out vertically
@@ -387,9 +394,6 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
     default: // right wall by default
       break;
   }
-
-  const wallAngle = lineAngle([wallBottomOrLeft, wallTopOrRight]);
-  const checkTopInstead = (wallType === "l" || wallType === "r") && (sign * wallAngle < sign * lineAngle([ecbp[same], ecbp[2]]));
 
   // first check if player ECB was even near the wall
   if (    (ecbp[0].y > wallTop.y    && ecb1[0].y > wallTop.y   ) // player ECB stayed above the wall
@@ -460,8 +464,8 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
       }
     }
 
-    if (checkTopInstead) {
-      // unless we are dealing with a wall where the ECB can collided on the topmost point, in whih case 'same' and 'top' are relevant
+    if ((wallType === "l" || wallType === "r") && (other === null || other === 0)) {
+      // if dealing with a wall, we might also want to check the top ECB point for collision if we aren't already doing so
       let otherCounterclockwise = false; // whether ( same ECB point -> top ECB point) is counterclockwise
       otherCorner = wallRight;
       if (wallType === "l") {
@@ -816,16 +820,16 @@ function findNextTargetFromSurface ( srcECB : ECB, ecbp : ECB, wall : [Vec2D, Ve
   if (wallType === "c") {
     const wallLeft = extremePoint(wall, "l");
     const wallRight = extremePoint(wall, "r");
-    if (ecbp[2].x <= wallRight.x && ecbp[2].x >= wallLeft.x) {
-      const intercept = coordinateIntercept(vLineThrough(ecbp[2]), wall);
-      pushout = intercept.y - ecbp[2].y;
+    if (ecbp[pt].x <= wallRight.x && ecbp[pt].x >= wallLeft.x) {
+      const intercept = coordinateIntercept(vLineThrough(ecbp[pt]), wall);
+      pushout = intercept.y - ecbp[pt].y;
     }
     else {
-      wallForward = ecbp[2].x < srcECB[2].x ? wallLeft : wallRight;
-      s = (wallForward.x - srcECB[2].x) / (ecbp[2].x - srcECB[2].x);
+      wallForward = ecbp[pt].x < srcECB[pt].x ? wallLeft : wallRight;
+      s = (wallForward.x - srcECB[pt].x) / (ecbp[pt].x - srcECB[pt].x);
       s = Math.min(Math.max(s,0), 1);
       tgtECB = interpolateECB(srcECB, ecbp, s);
-      pushout = wallForward.y - tgtECB[2].y;
+      pushout = wallForward.y - tgtECB[pt].y;
     }
   }
   else {
