@@ -3,7 +3,6 @@
 import type {PointSweepResult} from "../../physics/environmentalCollision";
 
 // finds the smallest value t of the list with t > min, t <= max
-// returns null
 export function findSmallestWithin(list : Array<number | null>, min : number, max : number, smallestSoFar : null | number = null) : null | number {
   if (list.length < 1) {
     return smallestSoFar;
@@ -30,21 +29,22 @@ export function findSmallestWithin(list : Array<number | null>, min : number, ma
   }
 };
 
-export function pickSmallestPointSweep ( list: Array<null | PointSweepResult>, smallestSoFar : null | PointSweepResult = null) : null | PointSweepResult {
+// finds the object with smallest sweeping parameter
+export function pickSmallestSweep<T : {sweep : number}>( list: Array<null | T>, smallestSoFar : null | T = null) : null | T {
   if (list.length < 1) {
     return smallestSoFar;
   }
   else {
     const [head, ...tail] = list;
     if (head === null) {
-      return pickSmallestPointSweep(tail, smallestSoFar);
+      return pickSmallestSweep(tail, smallestSoFar);
     }
     else {
       if (smallestSoFar === null || head.sweep < smallestSoFar.sweep) {
-        return pickSmallestPointSweep(tail, head);
+        return pickSmallestSweep(tail, head);
       }
       else {
-        return pickSmallestPointSweep(tail, smallestSoFar);
+        return pickSmallestSweep(tail, smallestSoFar);
       }
     }
   }
