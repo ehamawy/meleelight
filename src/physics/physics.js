@@ -44,7 +44,7 @@ function dealWithWallCollision (i : number, newCenter : Vec2D, wallType : string
     if (player[i].hit.hitlag === 0) {
       player[i].phys.face = sign;
       if (player[i].phys.techTimer > 0) {
-        if (input[i].x[0] || input[i].y[0] || input[i][0].lsY > 0.7) {
+        if (input[i][0].x || input[i][0].y || input[i][0].lsY > 0.7) {
           actionStates[characterSelections[i]].WALLTECHJUMP.init(i,input);
         } else {
           actionStates[characterSelections[i]].WALLTECH.init(i,input);
