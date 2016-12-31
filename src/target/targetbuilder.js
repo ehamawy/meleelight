@@ -13,6 +13,8 @@ import {intersectsAny} from "../stages/util/detectIntersections";
 /* eslint-disable */
 
 export let crossHairPos = new Vec2D(0,0);
+export let prevCrossHairPos = new Vec2D(0,0);
+export let prevRealCrossHair = new Vec2D(0,0);
 export let unGriddedCrossHairPos = new Vec2D(0,0);
 export let targetBuilder = 0;
 export let targetTool = 0;
@@ -31,6 +33,7 @@ export let tooSmallPos = new Vec2D(0,0);
 export var stageTemp = {
   box : [],
   polygon : [],
+  polygonMap : [],
   platform : [],
   ground : [],
   ceiling : [],
@@ -363,6 +366,7 @@ export function targetBuilderControls (p, input){
                     // find top point, also make polygon objects while we are looping
                     stageTemp.draw.polygon.push([]);
                     stageTemp.polygon.push([]);
+                    stageTemp.polygonMap.push([]);
                     for (let i=0;i<drawingPolygon.length;i++){
                       if (drawingPolygon[i].y > drawingPolygon[topPoint].y) {
                         topPoint = i;
@@ -421,19 +425,23 @@ export function targetBuilderControls (p, input){
                         // is ceiling
                         stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                         stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ceiling",stageTemp.ceiling.length-1]);
                       } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
                         // is ground
                         stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                         stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ground",stageTemp.ground.length-1]);
   
                       } else if (angle > Math.PI) {
                         // is wallL
                         stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                         stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallL",stageTemp.wallL.length-1]);
                       } else {
                         // is wallR
                         stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                         stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallR",stageTemp.wallR.length-1]);
                       }
   
                       curIndex = nextIndex;
@@ -555,7 +563,7 @@ export function targetBuilderControls (p, input){
             } else {
               if (!findTarget(realCrossHair)) {
                 if (!findPlatform(realCrossHair)) {
-                  if (!findBox(realCrossHair)) {
+                  if (!findPolygon(realCrossHair)) {
                     hoverItem = 0;
                   }
                 }
@@ -595,7 +603,7 @@ export function targetBuilderControls (p, input){
           } else {
             if (!findTarget(realCrossHair)) {
               if (!findPlatform(realCrossHair)) {
-                if (!findBox(realCrossHair)) {
+                if (!findPolygon(realCrossHair)) {
                   hoverItem = 0;
                 }
               }
@@ -613,8 +621,8 @@ export function targetBuilderControls (p, input){
                   stageTemp[hoverItem[0]].splice(hoverItem[1], 1);
                   sounds.menuBack.play();
                   break;
-                case "box":
-                  let ledgeDeleteQueue = [];
+                case "polygon":
+                  /*let ledgeDeleteQueue = [];
                   for (let j=0;j<stageTemp.ledge.length;j++){
                     if (stageTemp.ledge[j][0] == hoverItem[1]){
                       ledgeDeleteQueue.push(j);
@@ -627,17 +635,24 @@ export function targetBuilderControls (p, input){
                     if (stageTemp.ledge[n][0] > hoverItem[1]){
                       stageTemp.ledge[n][0]--;
                     }
+                  }*/
+
+                  for (let j=0;j<stageTemp.polygonMap[hoverItem[1]].length;j++){
+                    let type = stageTemp.polygonMap[hoverItem[1]][j][0];
+                    let index = stageTemp.polygonMap[hoverItem[1]][j][1];
+                    stageTemp.draw[type].splice(index, 1);
+                    stageTemp[type].splice(index, 1);
+                    for (let p=0;p<stageTemp.polygonMap.length;p++){
+                      for (let k=0;k<stageTemp.polygonMap[p].length;k++){
+                        if (stageTemp.polygonMap[p][k][0] === type && stageTemp.polygonMap[p][k][1] > index){
+                          stageTemp.polygonMap[p][k][1]--;
+                        }
+                      }
+                    }
                   }
-                  stageTemp.draw.box.splice(hoverItem[1], 1);
-                  stageTemp.box.splice(hoverItem[1], 1);
-                  stageTemp.draw.ground.splice(hoverItem[1], 1);
-                  stageTemp.ground.splice(hoverItem[1], 1);
-                  stageTemp.draw.wallL.splice(hoverItem[1], 1);
-                  stageTemp.wallL.splice(hoverItem[1], 1);
-                  stageTemp.draw.wallR.splice(hoverItem[1], 1);
-                  stageTemp.wallR.splice(hoverItem[1], 1);
-                  stageTemp.draw.ceiling.splice(hoverItem[1], 1);
-                  stageTemp.ceiling.splice(hoverItem[1], 1);
+                  stageTemp.polygon.splice(hoverItem[1], 1);
+                  stageTemp.draw.polygon.splice(hoverItem[1], 1);
+                  stageTemp.polygonMap.splice(hoverItem[1], 1);
                   sounds.menuBack.play();
                   break;
                 default:
@@ -654,6 +669,8 @@ export function targetBuilderControls (p, input){
         builderPaused = true;
         sounds.pause.play();
       }
+      prevRealCrossHair = new Vec2D(realCrossHair.x,realCrossHair.y);
+      prevCrossHairPos = new Vec2D(crossHairPos.x,crossHairPos.y);
     } else {
       if (input[p][0].lsY >= 0.7 && input[p][1].lsY < 0.7) {
         builderPauseSelected--;
@@ -728,8 +745,8 @@ export function targetBuilderControls (p, input){
 }
 
 export function drawTargetStage (){
-  ui.fillStyle = boxFill;
   for (let i=0;i<stageTemp.draw.polygon.length;i++){
+  ui.fillStyle = (hoverItem[0] === "polygon" && hoverItem[1] === i) ? "rgba(255,255,255,0.5)" : boxFill;
     let p = stageTemp.draw.polygon[i];
     ui.beginPath();
     ui.moveTo(p[0].x,p[0].y);
@@ -1130,13 +1147,15 @@ export function findPlatform (realCrossHair){
   return found;
 }
 
-export function findBox (realCrossHair){
+export function findPolygon (realCrossHair){
   let found = false;
-  for (let i=0;i<stageTemp.box.length;i++){
-    if (realCrossHair.x >= stageTemp.draw.box[i].min.x-5 && realCrossHair.x <= stageTemp.draw.box[i].max.x+5 && realCrossHair.y >= stageTemp.draw.box[i].max.y-5 && realCrossHair.y <= stageTemp.draw.box[i].min.y+5){
-      hoverItem = ["box",i];
-      found = true;
-      break;
+  for (let i=0;i<stageTemp.polygon.length;i++){
+    for (let j=1;j<stageTemp.polygon[i].length;j++){
+      if (Math.abs(realCrossHair.x - stageTemp.draw.polygon[i][j].x) <= 30 && Math.abs(realCrossHair.y - stageTemp.draw.polygon[i][j].y) <= 30){
+        hoverItem = ["polygon",i];
+        found = true;
+        break;
+      }
     }
   }
   return found;
@@ -1160,25 +1179,24 @@ export function centerItem (item,realCrossHair){
       stageTemp.platform[item[1]] = [new Vec2D(crossHairPos.x - w, crossHairPos.y), new Vec2D(crossHairPos.x + w,
         crossHairPos.y)];
       break;
-    case "box":
-      var w = Math.abs((stageTemp.box[item[1]].max.x - stageTemp.box[item[1]].min.x))/2;
-      let h = Math.abs((stageTemp.box[item[1]].max.y - stageTemp.box[item[1]].min.y))/2;
-      var wd = Math.abs((stageTemp.draw.box[item[1]].max.x - stageTemp.draw.box[item[1]].min.x))/2;
-      let hd = Math.abs((stageTemp.draw.box[item[1]].min.y - stageTemp.draw.box[item[1]].max.y))/2;
-      stageTemp.box[item[1]] = new Box2D([crossHairPos.x-w,crossHairPos.y-h],[crossHairPos.x+w,crossHairPos.y+h]);
-      stageTemp.draw.box[item[1]] = new Box2D([realCrossHair.x-wd,realCrossHair.y+hd],[realCrossHair.x+wd,realCrossHair.y-hd]);
+    case "polygon":
+      let offset = new Vec2D(crossHairPos.x - prevCrossHairPos.x, crossHairPos.y - prevCrossHairPos.y);
+      let offsetR = new Vec2D(realCrossHair.x - prevRealCrossHair.x, realCrossHair.y - prevRealCrossHair.y);
+      for (let i=0;i<stageTemp.polygon[item[1]].length;i++){
+        stageTemp.draw.polygon[item[1]][i].x += offsetR.x;
+        stageTemp.draw.polygon[item[1]][i].y += offsetR.y;
+        stageTemp.polygon[item[1]][i].x += offsetR.x;
+        stageTemp.polygon[item[1]][i].y += offsetR.y;
 
-      let b = stageTemp.draw.box[item[1]];
-      stageTemp.draw.ground[item[1]] = [new Vec2D(b.min.x,b.max.y),new Vec2D(b.max.x,b.max.y)];
-      stageTemp.draw.ceiling[item[1]] = [new Vec2D(b.min.x,b.min.y),new Vec2D(b.max.x,b.min.y)];
-      stageTemp.draw.wallL[item[1]] = [new Vec2D(b.min.x,b.max.y),new Vec2D(b.min.x,b.min.y)];
-      stageTemp.draw.wallR[item[1]] = [new Vec2D(b.max.x,b.max.y),new Vec2D(b.max.x,b.min.y)];
-
-      var b = stageTemp.box[item[1]];
-      stageTemp.ground[item[1]] = [new Vec2D(b.min.x, b.max.y), new Vec2D(b.max.x, b.max.y)];
-      stageTemp.ceiling[item[1]] = [new Vec2D(b.min.x, b.min.y), new Vec2D(b.max.x, b.min.y)];
-      stageTemp.wallL[item[1]] = [new Vec2D(b.min.x, b.max.y), new Vec2D(b.min.x, b.min.y)];
-      stageTemp.wallR[item[1]] = [new Vec2D(b.max.x, b.max.y), new Vec2D(b.max.x, b.min.y)];
+        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].x += offsetR.x;
+        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].x += offsetR.x;
+        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].y += offsetR.y;
+        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].y += offsetR.y;
+        stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].x += offset.x;
+        stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].x += offset.x;
+        stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].y += offset.y;
+        stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].y += offset.y;
+      }
       break;
     default:
       break;
