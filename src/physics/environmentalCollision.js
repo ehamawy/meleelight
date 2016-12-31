@@ -120,7 +120,7 @@ function isOutside (point : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Ve
 // and line2 by the two points p3 = (x3,y3) and p4 = (x4,y4)
 // this function returns the parameter t, such that p3 + t*(p4-p3) is the intersection point of the two lines
 // please ensure this function is not called on parallel lines
-function coordinateInterceptParameter (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D]) : number {
+export function coordinateInterceptParameter (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D]) : number {
   // const x1 = line1[0].x;
   // const x2 = line1[1].x;
   // const x3 = line2[0].x;

@@ -9,6 +9,7 @@ import {deepCopyObject} from "main/util/deepCopyObject";
 import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 import {setCustomTargetStages, customTargetStages} from "../stages/activeStage";
+import {intersectsAny} from "../stages/util/detectIntersections";
 /* eslint-disable */
 
 export let crossHairPos = new Vec2D(0,0);
@@ -241,6 +242,9 @@ export function createStageObject (s){
   return tCode;
 }
 
+let currentPolygonLines = [];
+let denied = false;
+
 export function targetBuilderControls (p, input){
   if (!showingCode){
     if (!builderPaused){
@@ -325,6 +329,7 @@ export function targetBuilderControls (p, input){
             // initiate build
             if (!amDrawingPolygon) {
               if (stageTemp.polygon.length < 120) {
+                currentPolygonLines = [];
                 drawingPolygon = [new Vec2D(realCrossHair.x, realCrossHair.y), new Vec2D(realCrossHair.x, realCrossHair.y)];
                 amDrawingPolygon = true;
                 sounds.blunthit.play();
@@ -334,101 +339,115 @@ export function targetBuilderControls (p, input){
               }
             } else {
               //RELEASE
-              drawingPolygon[drawingPolygon.length-1] = new Vec2D(realCrossHair.x,realCrossHair.y);
-              sounds.blunthit.play();
-              // if close enough to start of polygon
-              if (Math.abs(realCrossHair.x-drawingPolygon[0].x) < 2 && Math.abs(realCrossHair.y-drawingPolygon[0].y) < 2) {
-                amDrawingPolygon = false;
-                // if has enough sides, start building walls
-                if (drawingPolygon.length >= 3){
-                  var topPoint = 0;
-                  // find top point, also make polygon objects while we are looping
-                  stageTemp.draw.polygon.push([]);
-                  stageTemp.polygon.push([]);
-                  for (let i=0;i<drawingPolygon.length;i++){
-                    if (drawingPolygon[i].y > drawingPolygon[topPoint].y) {
-                      topPoint = i;
+              const lg = drawingPolygon.length;
+              const canClosePolygon = Math.abs(realCrossHair.x-drawingPolygon[0].x) < 2 && Math.abs(realCrossHair.y-drawingPolygon[0].y) < 2;
+              if (lg > 3 && !denied) {
+                currentPolygonLines.push([drawingPolygon[lg-4],drawingPolygon[lg-3]]);
+              }
+              const nextLine = [drawingPolygon[lg-2], new Vec2D(realCrossHair.x,realCrossHair.y)];
+              const relevantPolygonLines = canClosePolygon? currentPolygonLines.slice(1) : currentPolygonLines;
+              if (intersectsAny(nextLine, relevantPolygonLines)) {
+                sounds.deny.play();
+                denied = true;
+              }
+              else {
+                drawingPolygon[lg-1] = new Vec2D(realCrossHair.x,realCrossHair.y);
+                sounds.blunthit.play();
+                denied = false;
+                // if close enough to start of polygon
+                if (canClosePolygon) {
+                  amDrawingPolygon = false;
+                  // if has enough sides, start building walls
+                  if (drawingPolygon.length >= 3){
+                    var topPoint = 0;
+                    // find top point, also make polygon objects while we are looping
+                    stageTemp.draw.polygon.push([]);
+                    stageTemp.polygon.push([]);
+                    for (let i=0;i<drawingPolygon.length;i++){
+                      if (drawingPolygon[i].y > drawingPolygon[topPoint].y) {
+                        topPoint = i;
+                      }
+                      stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
+                      stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
                     }
-                    stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
-                    stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
+                    let direction = 1;
+                    // find index direction of clockwise
+                    // if point before top point is further right than the point after, change direction
+                    if (drawingPolygon[(topPoint === 0) ? drawingPolygon.length-1 : (topPoint-1)].x > drawingPolygon[(topPoint === drawingPolygon.length-1) ? 0 : (topPoint+1)].x) {
+                      direction = -1;
+                    }
+                    // loop through polygon and determine type
+                    let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
+                    //console.log(direction);
+                    for (let i=0;i<drawingPolygon.length;i++){
+                      let nextIndex = curIndex + direction;
+                      if (nextIndex === -1) {
+                        nextIndex = drawingPolygon.length - 1;
+                      } else if (nextIndex === drawingPolygon.length){
+                        nextIndex = 0;
+                      }
+                      //console.log("cur: "+curIndex);
+                      //console.log("next: "+nextIndex);
+                      //console.log("____________");
+                      let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
+                      let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
+                      let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
+                      if (Math.sign(angle) === -1) {
+                        angle += twoPi;
+                      }
+                      //console.log(angle);
+  
+  
+  
+                      /*if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
+                        // is ground
+                        stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+  
+                      } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
+                        // is ceiling
+                        stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                     } else if (angle > Math.PI) {
+                        // is wallR
+                        stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                      } else {
+                        // is wallL
+                        stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                      }*/
+                      if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
+                        // is ceiling
+                        stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                      } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
+                        // is ground
+                        stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+  
+                      } else if (angle > Math.PI) {
+                        // is wallL
+                        stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                      } else {
+                        // is wallR
+                        stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                      }
+  
+                      curIndex = nextIndex;
+                    }
+                    drawingPolygon = [];
+                    //undoList.push("box");
+                  } else {
+                    tooSmallTimer = 60;
+                    tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
                   }
-                  let direction = 1;
-                  // find index direction of clockwise
-                  // if point before top point is further right than the point after, change direction
-                  if (drawingPolygon[(topPoint === 0) ? drawingPolygon.length-1 : (topPoint-1)].x > drawingPolygon[(topPoint === drawingPolygon.length-1) ? 0 : (topPoint+1)].x) {
-                    direction = -1;
-                  }
-                  // loop through polygon and determine type
-                  let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
-                  //console.log(direction);
-                  for (let i=0;i<drawingPolygon.length;i++){
-                    let nextIndex = curIndex + direction;
-                    if (nextIndex === -1) {
-                      nextIndex = drawingPolygon.length - 1;
-                    } else if (nextIndex === drawingPolygon.length){
-                      nextIndex = 0;
-                    }
-                    //console.log("cur: "+curIndex);
-                    //console.log("next: "+nextIndex);
-                    //console.log("____________");
-                    let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
-                    let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
-                    let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
-                    if (Math.sign(angle) === -1) {
-                      angle += twoPi;
-                    }
-                    //console.log(angle);
-
-
-
-                    /*if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
-                      // is ground
-                      stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-
-                    } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
-                      // is ceiling
-                      stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                   } else if (angle > Math.PI) {
-                      // is wallR
-                      stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                    } else {
-                      // is wallL
-                      stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                    }*/
-                    if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
-                      // is ceiling
-                      stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                    } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
-                      // is ground
-                      stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-
-                    } else if (angle > Math.PI) {
-                      // is wallL
-                      stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                    } else {
-                      // is wallR
-                      stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                      stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                    }
-
-                    curIndex = nextIndex;
-                  }
-                  drawingPolygon = [];
-                  //undoList.push("box");
                 } else {
-                  tooSmallTimer = 60;
-                  tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
+                  // continue drawing more points
+                  drawingPolygon.push(new Vec2D(realCrossHair.x, realCrossHair.y));
                 }
-              } else {
-                // continue drawing more points
-                drawingPolygon.push(new Vec2D(realCrossHair.x, realCrossHair.y));
               }
             }
           } else {
