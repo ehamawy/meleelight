@@ -9,7 +9,7 @@ import {deepCopyObject} from "main/util/deepCopyObject";
 import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 import {setCustomTargetStages, customTargetStages} from "../stages/activeStage";
-import {intersectsAny} from "../stages/util/detectIntersections";
+import {intersectsAny, distanceToPolygon} from "../stages/util/detectIntersections";
 /* eslint-disable */
 
 export let crossHairPos = new Vec2D(0,0);
@@ -1150,12 +1150,11 @@ export function findPlatform (realCrossHair){
 export function findPolygon (realCrossHair){
   let found = false;
   for (let i=0;i<stageTemp.polygon.length;i++){
-    for (let j=1;j<stageTemp.polygon[i].length;j++){
-      if (Math.abs(realCrossHair.x - stageTemp.draw.polygon[i][j].x) <= 30 && Math.abs(realCrossHair.y - stageTemp.draw.polygon[i][j].y) <= 30){
-        hoverItem = ["polygon",i];
-        found = true;
-        break;
-      }
+    const d = distanceToPolygon(new Vec2D(realCrossHair.x, realCrossHair.y), stageTemp.polygon[i]);
+    if (d < 15) {
+      hoverItem = ["polygon",i];
+      found = true;
+      break;
     }
   }
   return found;

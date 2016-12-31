@@ -23,9 +23,14 @@ export function subtract(vec1 : Vec2D, vec2 : Vec2D) : Vec2D {
 }
 
 
-export function squaredDist (center1 : Vec2D, center2 : Vec2D) : number {
+function squaredDist (center1 : Vec2D, center2 : Vec2D) : number {
   return ( (center2.x - center1.x)*(center2.x - center1.x) + (center2.y - center1.y)*(center2.y - center1.y) );
 };
+
+export function euclideanDist(center1 : Vec2D, center2 : Vec2D) : number {
+  const sqDist = squaredDist(center1, center2);
+  return sqDist <= 0 ? 0 : Math.sqrt(sqDist);
+}
 
 export function manhattanDist (center1 : Vec2D, center2 : Vec2D) : number {
   return ( Math.abs(center2.x - center1.x) + Math.abs(center2.y - center1.y) );
