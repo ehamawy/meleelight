@@ -59,7 +59,7 @@ function distanceToLines( point : Vec2D, lines : Array<Line>) : number {
   }
 }
 
-function distanceToLine (point : Vec2D, line : Line) : number {
+export function distanceToLine (point : Vec2D, line : Line) : number {
   if (euclideanDist(line[0], line[1]) < 0.001 ) {
     return euclideanDist(point, line[0]);
   }

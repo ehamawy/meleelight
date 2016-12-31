@@ -9,7 +9,7 @@ import {deepCopyObject} from "main/util/deepCopyObject";
 import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 import {setCustomTargetStages, customTargetStages} from "../stages/activeStage";
-import {intersectsAny, distanceToPolygon} from "../stages/util/detectIntersections";
+import {intersectsAny, distanceToPolygon, distanceToLine} from "../stages/util/detectIntersections";
 /* eslint-disable */
 
 export let drawConnectIndicator = false;
@@ -20,11 +20,15 @@ export let prevRealCrossHair = new Vec2D(0,0);
 export let unGriddedCrossHairPos = new Vec2D(0,0);
 export let targetBuilder = 0;
 export let targetTool = 0;
+export let wallType = "ground";
+export let wallTypeIndex = 0;
+export let wallTypeList = ["ground","ceiling","wallL","wallR"];
 export let showingCode = false;
 export let toolInfoTimer = 0;
-export let toolInfo = ["Polygon","Platform","Ledge","Target","Move","Delete"];
+export let toolInfo = ["Polygon","Platform","Wall","Ledge","Target","Move","Delete"];
 export let holdingA = false;
 export let amDrawingPolygon = false;
+export let drawingWall = [new Vec2D(0,0),new Vec2D(0,0)];
 export let drawingPolygon = [];
 export let drawingPlatform = [new Vec2D(0,0),new Vec2D(0,0)];
 export let editingStage = -1;
@@ -315,20 +319,38 @@ export function targetBuilderControls (p, input){
           gridType = 0;
         }
       }
-      if (input[p][0].l && !input[p][1].l) {
+      if ((input[p][0].l && !input[p][1].l) || (input[p][0].dl && !input[p][1].dl)) {
         sounds.menuSelect.play();
         targetTool--;
         if (targetTool == -1) {
-          targetTool = 5;
+          targetTool = 6;
         }
         toolInfoTimer = 120;
-      } else if (input[p][0].r && !input[p][1].r) {
+      } else if ((input[p][0].r && !input[p][1].r) || (input[p][0].dr && !input[p][1].dr)) {
         sounds.menuSelect.play();
         targetTool++;
-        if (targetTool == 6) {
+        if (targetTool == 7) {
           targetTool = 0;
         }
         toolInfoTimer = 120;
+      } else if (targetTool === 2) {
+        if (input[p][0].du && !input[p][1].du) {
+          sounds.menuSelect.play();
+          wallTypeIndex++;
+          if (wallTypeIndex === 4) {
+            wallTypeIndex = 0;
+          }
+          wallType = wallTypeList[wallTypeIndex];
+          toolInfoTimer = 120;
+        } else if (input[p][0].dd && !input[p][1].dd) {
+          sounds.menuSelect.play();
+          wallTypeIndex--;
+          if (wallTypeIndex === -1) {
+            wallTypeIndex = 3;
+          }
+          wallType = wallTypeList[wallTypeIndex];
+          toolInfoTimer = 120;
+        }
       }
       switch (targetTool) {
         case 0:
@@ -354,7 +376,7 @@ export function targetBuilderControls (p, input){
               }
               const nextLine = [drawingPolygon[lg-2], new Vec2D(realCrossHair.x,realCrossHair.y)];
               const relevantPolygonLines = canClosePolygon? currentPolygonLines.slice(1) : currentPolygonLines;
-              if (intersectsAny(nextLine, relevantPolygonLines)) {
+              if (intersectsAny(nextLine, relevantPolygonLines) || (nextLine[0].x === nextLine[1].x && nextLine[0].y === nextLine[1].y)) {
                 sounds.deny.play();
                 denied = true;
               }
@@ -372,7 +394,7 @@ export function targetBuilderControls (p, input){
                     stageTemp.draw.polygon.push([]);
                     stageTemp.polygon.push([]);
                     stageTemp.polygonMap.push([]);
-                    for (let i=0;i<drawingPolygon.length;i++){
+                    for (let i=0;i<drawingPolygon.length-1;i++){
                       if (drawingPolygon[i].y > drawingPolygon[topPoint].y) {
                         topPoint = i;
                       }
@@ -387,45 +409,22 @@ export function targetBuilderControls (p, input){
                     }
                     // loop through polygon and determine type
                     let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
-                    //console.log(direction);
-                    for (let i=0;i<drawingPolygon.length;i++){
+
+                    for (let i=0;i<drawingPolygon.length-1;i++){
                       let nextIndex = curIndex + direction;
                       if (nextIndex === -1) {
                         nextIndex = drawingPolygon.length - 1;
                       } else if (nextIndex === drawingPolygon.length){
                         nextIndex = 0;
                       }
-                      //console.log("cur: "+curIndex);
-                      //console.log("next: "+nextIndex);
-                      //console.log("____________");
+
                       let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
                       let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
                       let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
                       if (Math.sign(angle) === -1) {
                         angle += twoPi;
                       }
-                      //console.log(angle);
-  
-  
-  
-                      /*if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
-                        // is ground
-                        stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-  
-                      } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
-                        // is ceiling
-                        stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                     } else if (angle > Math.PI) {
-                        // is wallR
-                        stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                      } else {
-                        // is wallL
-                        stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                      }*/
+                      
                       if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
                         // is ceiling
                         stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
@@ -452,6 +451,7 @@ export function targetBuilderControls (p, input){
                       curIndex = nextIndex;
                     }
                     drawingPolygon = [];
+                    console.log(stageTemp);
                     //undoList.push("box");
                   } else {
                     tooSmallTimer = 60;
@@ -522,6 +522,54 @@ export function targetBuilderControls (p, input){
           }
           break;
         case 2:
+          // WALL
+          if (!holdingA) {
+            if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
+              // initiate build
+              if (stageTemp.platform.length < 120) {
+                drawingWall[0] = new Vec2D(realCrossHair.x, realCrossHair.y);
+                drawingWall[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
+                holdingA = true;
+              } else {
+                sounds.deny.play();
+              }
+            }
+          } else {
+            if (input[p][0].a) {
+              // stretch
+              drawingWall[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
+            } else {
+              //RELEASE
+              drawingWall[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
+              // if magnitude is less than 10, say too small
+              if (Math.pow(drawingWall[0].x - drawingWall[1].x,2) + Math.pow(drawingWall[0].y - drawingWall[1].y,2) >= 100) {
+                let left = (drawingWall[0].x - drawingWall[1].x < 0) ? 0 : 1;
+                let right = 1 - left;
+                let convertedLeft = new Vec2D((drawingWall[left].x - 600) / 3 , (drawingWall[left].y - 375) / -3);
+                let convertedRight = new Vec2D((drawingWall[right].x - 600) / 3 , (drawingWall[right].y - 375) / -3);
+                let angle = Math.atan2(convertedRight.y - convertedLeft.y, convertedRight.x - convertedLeft.x);
+                if (((wallType === "ground" || wallType === "ceiling") && Math.abs(angle) <= Math.PI/6) || ((wallType === "wallL" || wallType === "wallR") && Math.abs(angle) != 0 && Math.abs(angle) != Math.PI)) {
+                  stageTemp.draw[wallType].push([new Vec2D(drawingWall[left].x, drawingWall[left].y), new Vec2D(drawingWall[right].x, drawingWall[right].y)]);
+                  stageTemp[wallType].push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
+                  if (stageTemp[wallType][stageTemp[wallType].length - 1][0].x > stageTemp[wallType][stageTemp[wallType].length -
+                      1][1].x) {
+                    console.log("wtf")
+                  }
+                } else {
+                  badAngleTimer = 60;
+                  badAnglePos = new Vec2D(realCrossHair.x, realCrossHair.y);
+                }
+                //undoList.push("platform");
+              } else {
+                tooSmallTimer = 60;
+                tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
+              }
+              holdingA = false;
+              sounds.blunthit.play();
+            }
+          }
+          break;
+        case 3:
           //LEDGE
           ledgeHoverItem = 0;
           for (let i=0;i<stageTemp.box.length;i++){
@@ -555,7 +603,7 @@ export function targetBuilderControls (p, input){
             }
           }
           break;
-        case 3:
+        case 4:
           //TARGET
           if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
             if (stageTemp.target.length < 20) {
@@ -568,7 +616,7 @@ export function targetBuilderControls (p, input){
             }
           }
           break;
-        case 4:
+        case 5:
           //MOVE
           if (grabbedItem == 0) {
             if (Math.abs(realCrossHair.x - stageTemp.draw.startingPoint.x) <= 30 && Math.abs(realCrossHair.y -
@@ -576,8 +624,8 @@ export function targetBuilderControls (p, input){
               hoverItem = ["startingPoint", 0];
             } else {
               if (!findTarget(realCrossHair)) {
-                if (!findPlatform(realCrossHair)) {
-                  if (!findPolygon(realCrossHair)) {
+                if (!findPolygon(realCrossHair)) {
+                  if (!findLine(realCrossHair)) {
                     hoverItem = 0;
                   }
                 }
@@ -609,15 +657,15 @@ export function targetBuilderControls (p, input){
           }
 
           break;
-        case 5:
+        case 6:
           //DELETE
           if (Math.abs(realCrossHair.x - stageTemp.draw.startingPoint.x) <= 30 && Math.abs(realCrossHair.y -
               stageTemp.draw.startingPoint.y) <= 30) {
             hoverItem = ["startingPoint", 0];
           } else {
             if (!findTarget(realCrossHair)) {
-              if (!findPlatform(realCrossHair)) {
-                if (!findPolygon(realCrossHair)) {
+              if (!findPolygon(realCrossHair)) {
+                if (!findLine(realCrossHair)) {
                   hoverItem = 0;
                 }
               }
@@ -633,6 +681,21 @@ export function targetBuilderControls (p, input){
                 case "target":
                   stageTemp.draw[hoverItem[0]].splice(hoverItem[1], 1);
                   stageTemp[hoverItem[0]].splice(hoverItem[1], 1);
+                  sounds.menuBack.play();
+                  break;
+                case "ground":
+                case "ceiling":
+                case "wallL":
+                case "wallR":
+                  stageTemp.draw[hoverItem[0]].splice(hoverItem[1], 1);
+                  stageTemp[hoverItem[0]].splice(hoverItem[1], 1);
+                  for (let p=0;p<stageTemp.polygonMap.length;p++){
+                    for (let k=0;k<stageTemp.polygonMap[p].length;k++){
+                      if (stageTemp.polygonMap[p][k][0] === hoverItem[0] && stageTemp.polygonMap[p][k][1] > hoverItem[1]){
+                        stageTemp.polygonMap[p][k][1]--;
+                      }
+                    }
+                  }
                   sounds.menuBack.play();
                   break;
                 case "polygon":
@@ -905,15 +968,25 @@ export function renderTargetBuilder (){
         ui.closePath();
         break;
       case 2:
-        //LEDGE
+        //WALL
+        ui.strokeStyle = "rgb(255,255,255)";
+        ui.lineWidth = 4;
+        ui.beginPath();
+        ui.moveTo(drawingWall[0].x, drawingWall[0].y);
+        ui.lineTo(drawingWall[1].x, drawingWall[1].y);
+        ui.stroke();
+        ui.closePath();
         break;
       case 3:
-        //TARGET
+        //LEDGE
         break;
       case 4:
-        //MOVE
+        //TARGET
         break;
       case 5:
+        //MOVE
+        break;
+      case 6:
         //DELETE
         break;
       default:
@@ -993,10 +1066,10 @@ export function renderTargetBuilder (){
         ui.stroke();
       }
     }
-  } else if (hoverItem[0] == "platform") {
+  } else if (hoverItem[0] === "platform" || hoverItem[0] === "ground" || hoverItem[0] === "ceiling" || hoverItem[0] === "wallL" || hoverItem[0] === "wallR") {
     ui.lineWidth = 3;
-    ui.strokeStyle = "#7eb3d5";
-    let p = stageTemp.draw.platform[i];
+    ui.strokeStyle = "rgba(255,255,255,0.7)";
+    let p = stageTemp.draw[hoverItem[0]][i];
     ui.beginPath();
     ui.moveTo(p[0].x, p[0].y);
     ui.lineTo(p[1].x, p[1].y);
@@ -1033,30 +1106,76 @@ export function renderTargetBuilder (){
   ui.fillStyle = "rgb(255,255,255)";
   ui.font = "13px Lucida Console, monaco, monospace";
 
-  for (let i=0;i<6;i++){
+  for (let i=0;i<7;i++){
     if (targetTool == i){
       if (toolInfoTimer > 0){
         ui.save();
         ui.globalAlpha = 1 * hoverToolbar;
         ui.fillStyle = "rgba(0,0,0," + Math.min(toolInfoTimer / 60, 1) + ")";
-        ui.fillRect(690 + i * 70, 715, 80, 30);
+        ui.fillRect(620 + i * 70, 715, 80, 30);
         ui.fillStyle = "rgba(255,255,255," + Math.min(toolInfoTimer / 60, 1) + ")";
-        ui.fillText(toolInfo[targetTool], 730 + i * 70, 733);
+        ui.fillText(toolInfo[targetTool], 660 + i * 70, 733);
         ui.restore();
       }
       ui.globalAlpha = 0.6 * hoverToolbar;
+      if (targetTool === 2 && toolInfoTimer > 0) {
+        ui.save();
+        ui.fillStyle = "rgba(255,255,255," + Math.min(toolInfoTimer / 60, 1) + ")";
+        ui.strokeStyle = "rgba(0,0,0," + Math.min(toolInfoTimer / 60, 1) + ")";
+        ui.lineWidth = 4;
+        for (let n=0;n<3;n++) {
+          let index = wallTypeIndex + n + 1;
+          if (index > 3) {
+            index -= 4;
+          }
+          ui.beginPath();
+          ui.moveTo(630 + i * 70, 660 - (n+1) * 70);
+          ui.arc(640 + i * 70, 660 - (n+1) * 70, 10, Math.PI, Math.PI * 1.5);
+          ui.lineTo(680 + i * 70, 650 - (n+1) * 70);
+          ui.arc(680 + i * 70, 660 - (n+1) * 70, 10, Math.PI * 1.5, twoPi);
+          ui.lineTo(690 + i * 70, 710 - (n+1) * 70);
+          ui.arc(680 + i * 70, 700 - (n+1) * 70, 10, 0, Math.PI / 2);
+          ui.lineTo(640 + i * 70, 710 - (n+1) * 70);
+          ui.arc(640 + i * 70, 700 - (n+1) * 70, 10, Math.PI / 2, Math.PI);
+          ui.closePath();
+          ui.fill();
+          ui.beginPath();
+          switch (wallTypeList[index]) {
+            case "ground":
+              ui.moveTo(788, 687 - (n+1) * 70);
+              ui.lineTo(812, 679 - (n+1) * 70);
+              break;
+            case "ceiling":
+              ui.moveTo(788, 679 - (n+1) * 70);
+              ui.lineTo(812, 687 - (n+1) * 70);
+              break;
+            case "wallL":
+              ui.moveTo(804, 671 - (n+1) * 70);
+              ui.lineTo(796, 695 - (n+1) * 70);
+              break;
+            case "wallR":
+              ui.moveTo(796, 671 - (n+1) * 70);
+              ui.lineTo(804, 695 - (n+1) * 70);
+              break;
+            default:
+              break;
+          }
+          ui.stroke();
+        }
+        ui.restore();
+      }
     } else {
       ui.globalAlpha = 0.2 * hoverToolbar;
     }
     ui.beginPath();
-    ui.moveTo(700 + i * 70, 660);
-    ui.arc(710 + i * 70, 660, 10, Math.PI, Math.PI * 1.5);
-    ui.lineTo(750 + i * 70, 650);
-    ui.arc(750 + i * 70, 660, 10, Math.PI * 1.5, twoPi);
-    ui.lineTo(760 + i * 70, 710);
-    ui.arc(750 + i * 70, 700, 10, 0, Math.PI / 2);
-    ui.lineTo(710 + i * 70, 710);
-    ui.arc(710 + i * 70, 700, 10, Math.PI / 2, Math.PI);
+    ui.moveTo(630 + i * 70, 660);
+    ui.arc(640 + i * 70, 660, 10, Math.PI, Math.PI * 1.5);
+    ui.lineTo(680 + i * 70, 650);
+    ui.arc(680 + i * 70, 660, 10, Math.PI * 1.5, twoPi);
+    ui.lineTo(690 + i * 70, 710);
+    ui.arc(680 + i * 70, 700, 10, 0, Math.PI / 2);
+    ui.lineTo(640 + i * 70, 710);
+    ui.arc(640 + i * 70, 700, 10, Math.PI / 2, Math.PI);
     ui.closePath();
     ui.fill();
   }
@@ -1067,14 +1186,45 @@ export function renderTargetBuilder (){
   ui.fillStyle = "rgba(0,0,0,0.8)";
   ui.strokeStyle = "rgba(0,0,0,0.8)";
   ui.font = "600 14px Lucida Console, monaco, monospace";
-  ui.fillText(120 - stageTemp.box.length, 745, 707);
-  ui.strokeRect(720, 670, 20, 20);
-  ui.fillText(120 - stageTemp.platform.length, 815, 707);
+  //ui.fillText(120 - stageTemp.box.length, 745, 707); 
   ui.beginPath();
-  ui.moveTo(788, 680);
-  ui.lineTo(812, 680);
+  ui.moveTo(660,670);
+  ui.lineTo(672,690);
+  ui.lineTo(648,690);
+  ui.closePath();
+  ui.stroke();
+  //ui.fillText(120 - stageTemp.platform.length, 815, 707);
+  ui.beginPath();
+  ui.moveTo(718, 680);
+  ui.lineTo(742, 680);
+  ui.stroke();
+  ui.beginPath();
+  switch (wallType) {
+    case "ground":
+      ui.moveTo(788, 687);
+      ui.lineTo(812, 679);
+      break;
+    case "ceiling":
+      ui.moveTo(788, 679);
+      ui.lineTo(812, 687);
+      break;
+    case "wallL":
+      ui.moveTo(804, 671);
+      ui.lineTo(796, 695);
+      break;
+    case "wallR":
+      ui.moveTo(796, 671);
+      ui.lineTo(804, 695);
+      break;
+    default:
+      break;
+  }
   ui.stroke();
   ui.closePath();
+  ui.save();
+  ui.scale(0.8,1);
+  ui.fillText(wallType, 800/0.8, 665);
+  ui.restore();
   ui.beginPath();
   ui.moveTo(860, 690);
   ui.lineTo(860, 670);
@@ -1117,13 +1267,13 @@ export function renderTargetBuilder (){
     ui.fillStyle = "rgba(255,255,255," + Math.min(badAngleTimer / 60, 1) + ")";
     ui.fillText("Bad angle", badAnglePos.x + 70, badAnglePos.y + 17);
   }
-  if (targetTool == 4) {
+  if (targetTool == 5) {
     if (grabbedItem == 0) {
       ui.drawImage(handOpen, crossHairPos.x * 3 + 600 - 18, crossHairPos.y * -3 + 375 - 24, 36, 48);
     } else {
       ui.drawImage(handGrab, crossHairPos.x * 3 + 600 - 18, crossHairPos.y * -3 + 375 - 24, 36, 48);
     }
-  } else if (targetTool == 5) {
+  } else if (targetTool == 6) {
     ui.font = "900 40px Arial";
     ui.fillStyle = "rgb(255, 83, 83)";
     ui.strokeStyle = "black";
@@ -1166,13 +1316,36 @@ export function findTarget (realCrossHair){
   return found;
 }
 
-export function findPlatform (realCrossHair){
+export function findLine (realCrossHair){
   let found = false;
-  for (let i=0;i<stageTemp.platform.length;i++){
-    if (Math.abs(realCrossHair.x - (stageTemp.draw.platform[i][0].x+stageTemp.draw.platform[i][1].x)/2) <= Math.abs(stageTemp.draw.platform[i][0].x-stageTemp.draw.platform[i][1].x)/2 + 10 && Math.abs(realCrossHair.y - stageTemp.draw.platform[i][0].y) <= 20){
-      hoverItem = ["platform",i];
-      found = true;
-      break;
+  let types = ["platform","ground","ceiling","wallL","wallR"];
+  for (let i=0;i<types.length;i++) {
+    for (let j=0;j<stageTemp[types[i]].length;j++) {
+      if (distanceToLine(realCrossHair, stageTemp.draw[types[i]][j]) <= 20){
+        if (i === 0) {
+          hoverItem = ["platform",j];
+          found = true;
+          break;
+        } else {
+          let partOfPolygon = false;
+          for (let p=0;p<stageTemp.polygonMap.length;p++) {
+            for (let k=0;k<stageTemp.polygonMap[p].length;k++) {
+              if (stageTemp.polygonMap[p][k][0] === types[i] && stageTemp.polygonMap[p][k][1] === j) {
+                partOfPolygon = true;
+                break;
+              }
+            }
+            if (partOfPolygon) {
+              break;
+            }
+          }
+          if (!partOfPolygon) {
+            hoverItem = [types[i], j];
+            found = true;
+            break;
+          }
+        }
+      }
     }
   }
   return found;
@@ -1192,6 +1365,8 @@ export function findPolygon (realCrossHair){
 }
 
 export function centerItem (item,realCrossHair){
+  let offset = new Vec2D(crossHairPos.x - prevCrossHairPos.x, crossHairPos.y - prevCrossHairPos.y);
+  let offsetR = new Vec2D(realCrossHair.x - prevRealCrossHair.x, realCrossHair.y - prevRealCrossHair.y);
   switch (item[0]){
     case "startingPoint":
       stageTemp.draw.startingPoint = new Vec2D(realCrossHair.x, realCrossHair.y);
@@ -1202,22 +1377,25 @@ export function centerItem (item,realCrossHair){
       stageTemp.target[item[1]] = new Vec2D(crossHairPos.x, crossHairPos.y);
       break;
     case "platform":
-      var w = Math.abs((stageTemp.platform[item[1]][0].x - stageTemp.platform[item[1]][1].x)) / 2;
-      var wd = Math.abs((stageTemp.draw.platform[item[1]][0].x - stageTemp.draw.platform[item[1]][1].x)) / 2;
-      stageTemp.draw.platform[item[1]] = [new Vec2D(realCrossHair.x - wd, realCrossHair.y), new Vec2D(realCrossHair.x +
-        wd, realCrossHair.y)];
-      stageTemp.platform[item[1]] = [new Vec2D(crossHairPos.x - w, crossHairPos.y), new Vec2D(crossHairPos.x + w,
-        crossHairPos.y)];
+    case "ground":
+    case "ceiling":
+    case "wallL":
+    case "wallR":
+      stageTemp.draw[item[0]][item[1]][0].x += offsetR.x;
+      stageTemp.draw[item[0]][item[1]][1].x += offsetR.x;
+      stageTemp.draw[item[0]][item[1]][0].y += offsetR.y;
+      stageTemp.draw[item[0]][item[1]][1].y += offsetR.y;
+      stageTemp[item[0]][item[1]][0].x += offset.x;
+      stageTemp[item[0]][item[1]][1].x += offset.x;
+      stageTemp[item[0]][item[1]][0].y += offset.y;
+      stageTemp[item[0]][item[1]][1].y += offset.y;
       break;
     case "polygon":
-      let offset = new Vec2D(crossHairPos.x - prevCrossHairPos.x, crossHairPos.y - prevCrossHairPos.y);
-      let offsetR = new Vec2D(realCrossHair.x - prevRealCrossHair.x, realCrossHair.y - prevRealCrossHair.y);
       for (let i=0;i<stageTemp.polygon[item[1]].length;i++){
         stageTemp.draw.polygon[item[1]][i].x += offsetR.x;
         stageTemp.draw.polygon[item[1]][i].y += offsetR.y;
         stageTemp.polygon[item[1]][i].x += offsetR.x;
         stageTemp.polygon[item[1]][i].y += offsetR.y;
-
         stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].x += offsetR.x;
         stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].x += offsetR.x;
         stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].y += offsetR.y;
