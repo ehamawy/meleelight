@@ -3,6 +3,7 @@ import {Vec2D} from "../../main/util/Vec2D";
 
 export default {
   box: [new Box2D([-77.27, -36], [77.27, 0])],
+  polygon : [],
   platform: [[new Vec2D(-61.393, 30.142), new Vec2D(-31.725, 30.142)], [new Vec2D(-19.018, 51.425), new Vec2D(19.017, 51.425)], [new Vec2D(31.704, 30.243), new Vec2D(63.075, 30.243)]],
   ground: [[new Vec2D(-77.27, 0), new Vec2D(77.27, 0)]],
   ceiling: [[new Vec2D(-77.27, -36), new Vec2D(77.27, -36)]],

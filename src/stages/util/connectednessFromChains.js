@@ -16,11 +16,11 @@ export type ConnectednessFunction = (label : [string, number], side : string) =>
 
 // here I am constructing a 'connectednessFunction' from the data of chains of connected grounds/platforms
 // if no chains are supplied, it is assumed that no grounds/platforms are connected to any other grounds/platforms
-export function connectednessFromChains(label : [string, number], side : string, isLoopThenChains : Array< [ boolean, Array < [string, number] > ] > ) : null | [string, number] {
-  return firstNonNull ( isLoopThenChains.map( (isLoopThenChain) => searchThroughChain(label, side, isLoopThenChain[1], isLoopThenChain[0]) ));
+export function connectednessFromChains(label : [string, number], side : string, chains : Array< Array < [string, number] > > ) : null | [string, number] {
+  return firstNonNull ( chains.map( (chain) => searchThroughChain(label, side, chain) ));
 };
 
-function searchThroughChain(label : [string, number], side : string, chain : Array< [string, number]>, isLoop : boolean, current : (null | [string, number] ) = null ) : null | [string, number] {
+function searchThroughChain(label : [string, number], side : string, chain : Array< [string, number]>, current : (null | [string, number] ) = null ) : null | [string, number] {
   if (chain === null || chain === undefined || chain.length < 1) {
     return null;
   }
@@ -28,50 +28,28 @@ function searchThroughChain(label : [string, number], side : string, chain : Arr
     const lg = chain.length;
     const [head, ...tail] = chain;
     const last = chain[lg-1];
-    if (isLoop) {
-      switch(side) {
-        case "l":
-          if (head[0] === label[0] && head[1] === label[1] ) {
-            return last;
+    switch(side) {
+      case "l":
+        if (head[0] === label[0] && head[1] === label[1] ) {
+          return current;
+        }
+        else {
+          return (searchThroughChain(label, side, tail, head));
+        }
+      case "r":
+        if (head[0] === label[0] && head[1] === label[1]) {
+          if (chain[1] === null || chain[1] === undefined) {
+            return null;
           }
           else {
-            return searchThroughChain(label, side, tail, false, head);
+            return chain[1];
           }
-        case "r":
-          if (last[0] === label[0] && last[1] === label[1]) {
-            return head;
-          }
-          else {
-            return searchThroughChain(label, side, chain, false);
-          }
-        default:
-          return searchThroughChain(label, side, chain, false);
-      }
-    }
-    else {
-      switch(side) {
-        case "l":
-          if (head[0] === label[0] && head[1] === label[1] ) {
-            return current;
-          }
-          else {
-            return (searchThroughChain(label, side, tail, false, head));
-          }
-        case "r":
-          if (head[0] === label[0] && head[1] === label[1]) {
-            if (chain[1] === null || chain[1] === undefined) {
-              return null;
-            }
-            else {
-              return chain[1];
-            }
-          }
-          else {
-            return (searchThroughChain(label, side, tail, false));
-          }
-        default:
-          return (searchThroughChain(label, side, tail, false));
-      }
+        }
+        else {
+          return (searchThroughChain(label, side, tail));
+        }
+      default:
+        return (searchThroughChain(label, side, tail));
     }
   }
 };

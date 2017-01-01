@@ -399,7 +399,7 @@ export function targetBuilderControls (p, input){
                         topPoint = i;
                       }
                       stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
-                      stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
+                      stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D((drawingPolygon[i].x-600)/3,(drawingPolygon[i].y-375)/-3);
                     }
                     let direction = 1;
                     // find index direction of clockwise
@@ -451,7 +451,7 @@ export function targetBuilderControls (p, input){
                       curIndex = nextIndex;
                     }
                     drawingPolygon = [];
-                    console.log(stageTemp);
+                    //console.log(stageTemp);
                     //undoList.push("box");
                   } else {
                     tooSmallTimer = 60;

@@ -79,7 +79,7 @@ export function drawStageInit() {
       for (var j = 0; j < activeStage.platform.length; j++) {
         if (j != activeStage.movingPlat){
           var x1 = (activeStage.platform[j][0].x * activeStage.scale) + activeStage.offset[0];
-          var x2 = (activeStage.platform[j][1].x * activeStage.scale) + activeStage.offset[0]
+          var x2 = (activeStage.platform[j][1].x * activeStage.scale) + activeStage.offset[0];
           fg1.rect(x1, (activeStage.platform[j][0].y * -activeStage.scale) + activeStage.offset[1], x2-x1,2*activeStage.scale);
         }
       }
@@ -139,8 +139,7 @@ export function drawStageInit() {
         else {
           ex1 = Math.floor(1*activeStage.scale);
           ex2 = Math.floor(-1*activeStage.scale);
-          fg1.setLineDash([Math.floor(1.5*activeStage.scale), Math.floor(3.5*activeStage.scale)]);
-          
+          fg1.setLineDash([Math.floor(1.5*activeStage.scale), Math.floor(3.5*activeStage.scale)]);          
         }
         for (var j = 0; j < activeStage.ledge.length; j++) {
           var e = activeStage.ledge[j];
@@ -210,11 +209,12 @@ export function drawStage() {
       for (let j=0;j<activeStage.polygon.length;j++){
         let p = activeStage.polygon[j];
         fg2.beginPath();
-        fg2.moveTo(p[0].x,p[0].y);
+        fg2.moveTo(p[0].x* activeStage.scale + activeStage.offset[0], p[0].y* -activeStage.scale + activeStage.offset[1]);
         for (let n=1;n<p.length;n++) {
-          fg2.lineTo(p[n].x,p[n].y);
+          fg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0], p[n].y* -activeStage.scale + activeStage.offset[1]);
         }
         fg2.closePath();
+        console.log(fg2.fillStyle);
         fg2.fill();
       }
     }
@@ -281,7 +281,7 @@ export function bgStar() {
         this.colour = "hsl(" + 358 * Math.random() + ", 100%, 50%)";
     }
     else {
-        this.colour = "hsl(" + 358 * Math.random() + ",100%,15%)"
+        this.colour = "hsl(" + 358 * Math.random() + ",100%,15%)";
     }
     this.pos = new Vec2D(0, 0);
     this.life = 0;

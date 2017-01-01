@@ -6,6 +6,7 @@ import {Vec2D} from "../../main/util/Vec2D";
 
 export default {
   box: [new Box2D([-56, -100], [56, 0])],
+  polygon : [],
   platform: [[new Vec2D(-103.6, -33.25), new Vec2D(-91.7, -33.25)], [new Vec2D(-59.5, 23.45), new Vec2D(-28, 23.45)], [new Vec2D(28, 23.45), new Vec2D(59.5, 23.45)], [new Vec2D(-15.75, 42), new Vec2D(15.75, 42)]],
   ground: [[new Vec2D(-56, 0), new Vec2D(56, 0)]],
   ceiling: [[new Vec2D(-56, -100), new Vec2D(56, -100)]],

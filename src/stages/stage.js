@@ -3,13 +3,16 @@
 import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 
+type Surface = [Vec2D, Vec2D];
+
 export type Stage = {
   box           : Array< Box2D >,
-  platform      : Array< [Vec2D, Vec2D] >,
-  ground        : Array< [Vec2D, Vec2D] >,
-  ceiling       : Array< [Vec2D, Vec2D] >,
-  wallL         : Array< [Vec2D, Vec2D] >,
-  wallR         : Array< [Vec2D, Vec2D] >,
+  polygon       : Array< Array< Surface > >,
+  platform      : Array< Surface >,
+  ground        : Array< Surface >,
+  ceiling       : Array< Surface >,
+  wallL         : Array< Surface >,
+  wallR         : Array< Surface >,
   startingPoint : [Vec2D, Vec2D, Vec2D, Vec2D],
   startingFace  : [number, number, number, number],
   respawnPoints : [Vec2D, Vec2D, Vec2D, Vec2D],
@@ -19,12 +22,12 @@ export type Stage = {
   ledgePos      : Array< Vec2D >,
   scale         : number,
   offset        : [number, number],
-  connected?    : Array< [boolean, Array< [ string, number] > ] >
+  connected?    : Array< Array< [ string, number] > >
 }
 
 export type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 
-export function getSurfaceFromStage ( surfaceTypeAndIndex : [string, number], stage : Stage) : [Vec2D, Vec2D] {
+export function getSurfaceFromStage ( surfaceTypeAndIndex : [string, number], stage : Stage) : Surface {
   const surfaceType  = surfaceTypeAndIndex[0];
   const surfaceIndex = surfaceTypeAndIndex[1];
   switch (surfaceType) {

@@ -3,6 +3,9 @@ import {Vec2D} from "../../main/util/Vec2D";
 
 export default {
   box: [new Box2D([-85.6, -10], [85.6, 0])],
+  polygon : [ [ new Vec2D(-85.6, 0), new Vec2D(85.6, 0), new Vec2D(85.6, -10), new Vec2D(65, -20), new Vec2D(65, -30)
+              , new Vec2D(60, -47), new Vec2D(50, -55), new Vec2D(45, -56), new Vec2D(-45, -56), new Vec2D(-50, -55)
+              , new Vec2D(-60, -47), new Vec2D(-65, -30), new Vec2D(-65, -20), new Vec2D(-85.6, -10) ]],
   platform: [],
   ground: [[new Vec2D(-85.6, 0), new Vec2D(85.6, 0)]],
   ceiling: [[new Vec2D(-50, -55), new Vec2D(-45, -56)], [new Vec2D(-45, -56), new Vec2D(45, -56)], [new Vec2D(45, -56), new Vec2D(50, -55)]],  
@@ -17,7 +20,6 @@ export default {
   ledgePos: [new Vec2D(-68.4, 0), new Vec2D(68.4, 0)],
   scale: 4.5,
   offset: [600, 400],
-  connected: [[true, [["g",0], ["r",0], ["r",1], ["r",2], ["r",3], ["r",4], ["c",2], ["c",1], ["c",0], ["l",4], ["l",3], ["l",2], ["l",1], ["l",0]]]],
   movingPlat: -1,
   movingPlatforms: function () {
   }
