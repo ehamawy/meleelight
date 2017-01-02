@@ -14,7 +14,8 @@ const smallBoxStageNames = [
   "Y-STORY",
   "P-STADIUM",
   "DREAMLAND",
-  "LAST"
+  "LAST",
+  "FOUNTAIN"
 ];
 
 const bigBoxNames = [
@@ -22,7 +23,8 @@ const bigBoxNames = [
   "Yoshi's Story",
   "Pokemon Stadium",
   "Dreamland",
-  "Final Destination"
+  "Final Destination",
+  "Fountain Of Dreams"
 ];
 
 const stageImages = {
@@ -31,6 +33,7 @@ const stageImages = {
   2:retrieveImage( "assets/stage-icons/ps.png"),
   3:retrieveImage( "assets/stage-icons/dl.png"),
   4:retrieveImage( "assets/stage-icons/fd.png"),
+  5:retrieveImage( "assets/stage-icons/fd.png"),
 };
 
 function retrieveImage(src){
@@ -174,7 +177,7 @@ export function drawSSS() {
   }
   ui.fillStyle = "rgb(245, 144, 61)";
   ui.strokeStyle = "rgb(245, 144, 61)";
-  if (stageSelected == 5) {
+  if (stageSelected === smallBoxStageNames.length) {
     if (stageSelectTimer % 8 > 4) {
       ui.fillStyle = "rgb(251, 195, 149)";
       ui.strokeStyle = "rgb(251, 195, 149)";

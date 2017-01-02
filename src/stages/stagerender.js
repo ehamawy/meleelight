@@ -214,7 +214,6 @@ export function drawStage() {
           fg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0], p[n].y* -activeStage.scale + activeStage.offset[1]);
         }
         fg2.closePath();
-        console.log(fg2.fillStyle);
         fg2.fill();
       }
     }
