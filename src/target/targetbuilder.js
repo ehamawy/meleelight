@@ -668,7 +668,7 @@ export function targetBuilderControls (p, input){
               hoverItem = ["startingPoint", 0];
             } else {
               if (!findTarget(realCrossHair)) {
-                if (!findPolygon(realCrossHair)) {
+                if (!findPolygon(crossHairPos)) {
                   if (!findLine(realCrossHair)) {
                     hoverItem = 0;
                   }
@@ -708,7 +708,7 @@ export function targetBuilderControls (p, input){
             hoverItem = ["startingPoint", 0];
           } else {
             if (!findTarget(realCrossHair)) {
-              if (!findPolygon(realCrossHair)) {
+              if (!findPolygon(crossHairPos)) {
                 if (!findLine(realCrossHair)) {
                   hoverItem = 0;
                 }
