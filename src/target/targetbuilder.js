@@ -53,6 +53,7 @@ export var stageTemp = {
   blastzone : new Box2D([-250,-250],[250,250]),
   scale : 3,
   offset : [600,375],
+  connected : [],
   draw : {
     polygon : [],
     box : [],
@@ -381,12 +382,13 @@ export function targetBuilderControls (p, input){
                 denied = true;
               }
               else {
-                drawingPolygon[lg-1] = new Vec2D(realCrossHair.x,realCrossHair.y);
                 sounds.blunthit.play();
                 denied = false;
                 // if close enough to start of polygon
                 if (canClosePolygon) {
                   amDrawingPolygon = false;
+                  // remove last point because same as origin
+                  drawingPolygon.pop();
                   // if has enough sides, start building walls
                   if (drawingPolygon.length >= 3){
                     var topPoint = 0;
@@ -394,8 +396,9 @@ export function targetBuilderControls (p, input){
                     stageTemp.draw.polygon.push([]);
                     stageTemp.polygon.push([]);
                     stageTemp.polygonMap.push([]);
-                    for (let i=0;i<drawingPolygon.length-1;i++){
-                      if (drawingPolygon[i].y > drawingPolygon[topPoint].y) {
+                    for (let i=0;i<drawingPolygon.length;i++){
+                      // use less than because measuring in canvas pixels
+                      if (drawingPolygon[i].y < drawingPolygon[topPoint].y) {
                         topPoint = i;
                       }
                       stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
@@ -410,7 +413,7 @@ export function targetBuilderControls (p, input){
                     // loop through polygon and determine type
                     let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
 
-                    for (let i=0;i<drawingPolygon.length-1;i++){
+                    for (let i=0;i<drawingPolygon.length;i++){
                       let nextIndex = curIndex + direction;
                       if (nextIndex === -1) {
                         nextIndex = drawingPolygon.length - 1;
@@ -426,32 +429,73 @@ export function targetBuilderControls (p, input){
                       }
                       
                       if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
-                        // is ceiling
-                        stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ceiling",stageTemp.ceiling.length-1]);
-                      } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
                         // is ground
                         stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                         stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
                         stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ground",stageTemp.ground.length-1]);
-  
+                      } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
+                        // is ceiling
+                        stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ceiling",stageTemp.ceiling.length-1]);
                       } else if (angle > Math.PI) {
-                        // is wallL
-                        stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallL",stageTemp.wallL.length-1]);
-                      } else {
                         // is wallR
                         stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                         stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
                         stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallR",stageTemp.wallR.length-1]);
+                      } else {
+                        // is wallL
+                        stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                        stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallL",stageTemp.wallL.length-1]);
                       }
   
                       curIndex = nextIndex;
                     }
+                    // connect grounds
+                    let w = stageTemp.polygonMap[stageTemp.polygonMap.length-1][0];
+                    // if first is ground, loop backward till you find the origin
+                    let origin = 0;
+                    if (w[0] === "ground") {
+                      var foundOrigin = false;
+                      for (let j=stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1;j>0;j--) {
+                        let o = stageTemp.polygonMap[stageTemp.polygonMap.length-1][j];
+                        if (o[0] != "ground") {
+                          foundOrigin = true;
+                          if (j === stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1) {
+                            origin = 0;
+                          } else {
+                            origin = j + 1;
+                          }
+                          break;
+                        }
+                      }
+                    }
+                    // loop through from origin
+                    let index = origin;
+                    let curList = [];
+                    for (let i=0;i<stageTemp.polygonMap[stageTemp.polygonMap.length-1].length;i++) {
+                      let w = stageTemp.polygonMap[stageTemp.polygonMap.length-1][index];
+                      if (w[0] === "ground") {
+                        curList.push(["g",w[1]]);
+                      }
+                      if (w[0] != "ground" || i === stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1) {
+                        if (curList.length >= 2) {
+                          // create connected list in stage object
+                          stageTemp.connected.push([]);
+                          for (let n=0;n<curList.length;n++) {
+                            stageTemp.connected[stageTemp.connected.length-1].push(["g",curList[n][1]]);
+                          }
+                        }
+                        curList = [];
+                      }
+
+                      index++;
+                      if (index > stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1) {
+                        index = 0;
+                      }
+                    }
                     drawingPolygon = [];
-                    //console.log(stageTemp);
                     //undoList.push("box");
                   } else {
                     tooSmallTimer = 60;
