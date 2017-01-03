@@ -59,7 +59,7 @@ export let activeStage = {
   respawnPoints: [new Vec2D(-50, 50), new Vec2D(50, 50), new Vec2D(-25, 35), new Vec2D(25, 35)],
   respawnFace: [1, -1, 1, -1],
   blastzone: new Box2D([-224, -108.8], [224, 200]),
-  ledge: [[0, 0], [0, 1]],
+  ledge: [["ground", 0, 0], ["ground", 0, 1]],
   ledgePos: [new Vec2D(-68.4, 0), new Vec2D(68.4, 0)],
   scale: 4.5,
   offset: [600, 480],

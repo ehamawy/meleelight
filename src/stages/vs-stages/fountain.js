@@ -9,7 +9,7 @@ const platYMin = 12.375;
 const platMax = 27.375;
 
 export default {
-  box: [new Box2D([-63.35, -4.5], [63.35, 0.62])],
+  box: [],
   polygon : [ [ new Vec2D(-63.35, 0.62), new Vec2D(-53.5, 0.62), new Vec2D(-51.25, 0),new Vec2D(51.25, 0), new Vec2D(53.5, 0.62), new Vec2D(63.35, 0.62)
               , new Vec2D(63.35, -4.5), new Vec2D(59.33, -15), new Vec2D(56.9, -19.5)
               , new Vec2D(55, -27), new Vec2D(52, -32), new Vec2D(48, -38), new Vec2D(41, -42)
@@ -38,7 +38,7 @@ export default {
   respawnPoints: [new Vec2D(0, 63.75), new Vec2D(0, 63.75), new Vec2D(0, 63.75), new Vec2D(0, 63.75)],
   respawnFace: [1, 1, 1, 1],
   blastzone: new Box2D([-198.75, -146.25], [198.75, 202.5]),
-  ledge: [[0, 0], [0, 1]],
+  ledge: [["ground", 0, 0], ["ground", 4, 1]],
   ledgePos: [new Vec2D(-66.35, 0.62), new Vec2D(66.35, 0.62)],
   scale: 5,
   offset: [600, 450],

@@ -4,7 +4,7 @@ import {Vec2D} from "../../main/util/Vec2D";
 /*eslint indent:0*/ 
 
 export default {
-  box: [new Box2D([-77.25, -1], [77.25, 0])],
+  box: [],
   polygon : [ [ new Vec2D(-77.25,0), new Vec2D(77.25,0), new Vec2D(76.5,-11), new Vec2D(65.75,-36)
               , new Vec2D(-65.75,-36), new Vec2D(-76.5,-11), new Vec2D(-77.25,0) ]
             ],
@@ -18,7 +18,7 @@ export default {
   respawnPoints: [new Vec2D(-60, 50), new Vec2D(60, 50), new Vec2D(-40, 50), new Vec2D(40, 50)],
   respawnFace: [1, -1, 1, -1],
   blastzone: new Box2D([-255, -123], [255, 250]),
-  ledge: [[0, 0], [0, 1]],
+  ledge: [["ground", 0, 0], ["ground", 0, 1]],
   ledgePos: [new Vec2D(-77.25, 0), new Vec2D(77.25, 0)],
   scale: 3.5,
   offset: [600, 500],

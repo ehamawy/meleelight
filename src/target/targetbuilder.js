@@ -700,32 +700,27 @@ export function targetBuilderControls (p, input){
         case 3:
           //LEDGE
           ledgeHoverItem = 0;
-          for (let i=0;i<stageTemp.box.length;i++){
-            if (realCrossHair.x >= stageTemp.draw.box[i].min.x-5 && realCrossHair.x <= stageTemp.draw.box[i].max.x+5 && realCrossHair.y >= stageTemp.draw.box[i].max.y-5 && realCrossHair.y <= stageTemp.draw.box[i].min.y+5){
-              ledgeHoverItem = ["box",i];
-              break;
-            }
-          }
-          if (ledgeHoverItem != 0) {
-            let i = ledgeHoverItem[1];
-            if (Math.abs(realCrossHair.x - stageTemp.draw.box[i].min.x) < Math.abs(realCrossHair.x - stageTemp.draw.box[
-                i].max.x)) {
-              ledgeHoverItem.push(0);
+          let found = findLine(realCrossHair, ["platform", "ground"], true);
+          if (found) {
+            let toLeft = Math.pow(realCrossHair.x - stageTemp.draw[hoverItem[0]][hoverItem[1]][0].x,2) + Math.pow(realCrossHair.y - stageTemp.draw[hoverItem[0]][hoverItem[1]][0].y,2);
+            let toRight = Math.pow(realCrossHair.x - stageTemp.draw[hoverItem[0]][hoverItem[1]][1].x,2) + Math.pow(realCrossHair.y - stageTemp.draw[hoverItem[0]][hoverItem[1]][1].y,2);
+            if (toRight < toLeft) {
+              ledgeHoverItem = [hoverItem[0], hoverItem[1], 1];
             } else {
-              ledgeHoverItem.push(1);
+              ledgeHoverItem = [hoverItem[0], hoverItem[1], 0];
             }
             if (input[p][0].a && !input[p][1].a && !input[p][0].z){
               let alreadyExist = false;
               for (let j=0;j<stageTemp.ledge.length;j++){
-                if (stageTemp.ledge[j][0] == ledgeHoverItem[1] && stageTemp.ledge[j][1] == ledgeHoverItem[2]){
+                if (stageTemp.ledge[j][0] === ledgeHoverItem[0] && stageTemp.ledge[j][1] === ledgeHoverItem[1] && stageTemp.ledge[j][2] == ledgeHoverItem[2]){
                   stageTemp.ledge.splice(j,1);
                   alreadyExist = true;
                   break;
                 }
               }
               if (!alreadyExist) {
-                stageTemp.ledge.push([ledgeHoverItem[1], ledgeHoverItem[2]]);
-                undoList.push("ledge");
+                stageTemp.ledge.push([ledgeHoverItem[0], ledgeHoverItem[1], ledgeHoverItem[2]]);
+                //undoList.push("ledge");
               }
               sounds.blunthit.play();
             }
@@ -1025,23 +1020,18 @@ export function drawTargetStage (){
     ui.stroke();
   }
   ui.strokeStyle = "#e7a44c";
-  ui.lineWidth = 1;
+  ui.lineWidth = 2;
   for (let i=0;i<stageTemp.ledge.length;i++){
     let e = stageTemp.ledge[i];
+    let pA = stageTemp.draw[e[0]][e[1]][e[2]];
+    let pB = stageTemp.draw[e[0]][e[1]][1-e[2]];
+    let ang = Math.atan2((pB.y - pA.y) , (pB.x - pA.x));
+    let magnitude = Math.sqrt(Math.pow(pB.y - pA.y, 2) + Math.pow(pB.x - pA.x, 2));
+    let length = Math.min(0.25 * magnitude, 20);
+    let pC = new Vec2D(pA.x + length * Math.cos(ang), pA.y + length * Math.sin(ang));
     ui.beginPath();
-    if (e[1]) {
-      ui.moveTo(stageTemp.draw.box[e[0]].max.x, stageTemp.draw.box[e[0]].max.y + Math.min(30, (stageTemp.draw.box[e[0]]
-        .min.y - stageTemp.draw.box[e[0]].max.y) / 2));
-      ui.lineTo(stageTemp.draw.box[e[0]].max.x, stageTemp.draw.box[e[0]].max.y);
-      ui.lineTo(stageTemp.draw.box[e[0]].max.x - Math.min(30, (stageTemp.draw.box[e[0]].max.x - stageTemp.draw.box[e[
-        0]].min.x) / 2), stageTemp.draw.box[e[0]].max.y);
-    } else {
-      ui.moveTo(stageTemp.draw.box[e[0]].min.x, stageTemp.draw.box[e[0]].max.y + Math.min(30, (stageTemp.draw.box[e[0]]
-        .min.y - stageTemp.draw.box[e[0]].max.y) / 2));
-      ui.lineTo(stageTemp.draw.box[e[0]].min.x, stageTemp.draw.box[e[0]].max.y);
-      ui.lineTo(stageTemp.draw.box[e[0]].min.x + Math.min(30, (stageTemp.draw.box[e[0]].max.x - stageTemp.draw.box[e[
-        0]].min.x) / 2), stageTemp.draw.box[e[0]].max.y);
-    }
+    ui.moveTo(pA.x, pA.y);
+    ui.lineTo(pC.x, pC.y);
     ui.closePath();
     ui.stroke();
   }
@@ -1220,12 +1210,7 @@ export function renderTargetBuilder (){
   if (ledgeHoverItem != 0) {
     ui.fillStyle = "rgb(255, 148, 70)";
     ui.beginPath();
-    if (ledgeHoverItem[2]) {
-      // if right side
-      ui.arc(stageTemp.draw.box[ledgeHoverItem[1]].max.x, stageTemp.draw.box[ledgeHoverItem[1]].max.y, 10, 0, twoPi);
-    } else {
-      ui.arc(stageTemp.draw.box[ledgeHoverItem[1]].min.x, stageTemp.draw.box[ledgeHoverItem[1]].max.y, 10, 0, twoPi);
-    }
+    ui.arc(stageTemp.draw[ledgeHoverItem[0]][ledgeHoverItem[1]][ledgeHoverItem[2]].x, stageTemp.draw[ledgeHoverItem[0]][ledgeHoverItem[1]][ledgeHoverItem[2]].y, 10, 0, twoPi);
     ui.closePath();
     ui.fill();
   }
@@ -1456,9 +1441,8 @@ export function findTarget (realCrossHair){
   return found;
 }
 
-export function findLine (realCrossHair){
+export function findLine (realCrossHair, types = ["platform","ground","ceiling","wallL","wallR"], ignorePolygon = false){
   let found = false;
-  let types = ["platform","ground","ceiling","wallL","wallR"];
   for (let i=0;i<types.length;i++) {
     for (let j=0;j<stageTemp[types[i]].length;j++) {
       if (distanceToLine(realCrossHair, stageTemp.draw[types[i]][j]) <= 20){
@@ -1468,15 +1452,17 @@ export function findLine (realCrossHair){
           break;
         } else {
           let partOfPolygon = false;
-          for (let p=0;p<stageTemp.polygonMap.length;p++) {
-            for (let k=0;k<stageTemp.polygonMap[p].length;k++) {
-              if (stageTemp.polygonMap[p][k][0] === types[i] && stageTemp.polygonMap[p][k][1] === j) {
-                partOfPolygon = true;
+          if (!ignorePolygon) {
+            for (let p=0;p<stageTemp.polygonMap.length;p++) {
+              for (let k=0;k<stageTemp.polygonMap[p].length;k++) {
+                if (stageTemp.polygonMap[p][k][0] === types[i] && stageTemp.polygonMap[p][k][1] === j) {
+                  partOfPolygon = true;
+                  break;
+                }
+              }
+              if (partOfPolygon) {
                 break;
               }
-            }
-            if (partOfPolygon) {
-              break;
             }
           }
           if (!partOfPolygon) {

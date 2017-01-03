@@ -712,6 +712,7 @@ function dealWithLedges ( i : number, input : any) : void {
 
   let lsBF = -1;
   let lsBB = -1;
+  let foundLedge = 0;
   if (player[i].phys.onLedge === -1 && !player[i].phys.ledgeRegrabCount) {
     for (let j = 0; j < activeStage.ledge.length; j++) {
       let ledgeAvailable = true;
@@ -725,15 +726,15 @@ function dealWithLedges ( i : number, input : any) : void {
         }
       }
       if (ledgeAvailable && !player[i].phys.grounded && player[i].hit.hitstun <= 0) {
-        const x = (activeStage.ledge[j][1]) ? activeStage.box[activeStage.ledge[j][0]].max.x : activeStage.box[activeStage.ledge[j][0]].min.x;
-        const y = activeStage.box[activeStage.ledge[j][0]].max.y;
+        const x = activeStage[activeStage.ledge[j][0]][activeStage.ledge[j][1]][activeStage.ledge[j][2]].x;
+        const y = activeStage[activeStage.ledge[j][0]][activeStage.ledge[j][1]][activeStage.ledge[j][2]].y;
 
         if (x > player[i].phys.ledgeSnapBoxF.min.x &&
             x < player[i].phys.ledgeSnapBoxF.max.x &&
             y < player[i].phys.ledgeSnapBoxF.min.y &&
             y > player[i].phys.ledgeSnapBoxF.max.y) {
 
-          if (activeStage.ledge[j][1] === 0) {
+          if (activeStage.ledge[j][2] === 0) {
             if (actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[0]) {
               lsBF = j;
             }
@@ -746,7 +747,7 @@ function dealWithLedges ( i : number, input : any) : void {
             y < player[i].phys.ledgeSnapBoxB.min.y &&
             y > player[i].phys.ledgeSnapBoxF.max.y) {
 
-          if (activeStage.ledge[j][1] === 1) {
+          if (activeStage.ledge[j][2] === 1) {
             if (actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[0]) {
               lsBB = j;
             }
@@ -757,21 +758,21 @@ function dealWithLedges ( i : number, input : any) : void {
       }
       if (player[i].phys.cVel.y < 0 && input[i][0].lsY > -0.5) {
         if (lsBF > -1) {
-          if (activeStage.ledge[lsBF][1] * -2 + 1 === player[i].phys.face || actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
+          foundLedge = activeStage.ledge[lsBF];
+          if (foundLedge[2] * -2 + 1 === player[i].phys.face || actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
             player[i].phys.onLedge = lsBF;
             player[i].phys.ledgeRegrabTimeout = 30;
-            player[i].phys.face = activeStage.ledge[lsBF][1] * -2 + 1;
-            player[i].phys.pos = new Vec2D(activeStage.box[activeStage.ledge[lsBF][0]].min.x + edgeOffset[0][0], activeStage.box[activeStage.ledge[
-              lsBF][0]].min.y + edgeOffset[0][1]);
+            player[i].phys.face = foundLedge[2] * -2 + 1;
+            player[i].phys.pos = new Vec2D(activeStage[foundLedge[0]][foundLedge[1]][foundLedge[2]].x + edgeOffset[0][0], activeStage[foundLedge[0]][foundLedge[1]][foundLedge[2]].y + edgeOffset[0][1]);
             actionStates[characterSelections[i]].CLIFFCATCH.init(i,input);
           }
         } else if (lsBB > -1) {
-          if (activeStage.ledge[lsBB][1] * -2 + 1 === player[i].phys.face || actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
+          foundLedge = activeStage.ledge[lsBB];
+          if (foundLedge[2] * -2 + 1 === player[i].phys.face || actionStates[characterSelections[i]][player[i].actionState].canGrabLedge[1]) {
             player[i].phys.onLedge = lsBB;
             player[i].phys.ledgeRegrabTimeout = 30;
-            player[i].phys.face = activeStage.ledge[lsBB][1] * -2 + 1;
-            player[i].phys.pos = new Vec2D(activeStage.box[activeStage.ledge[lsBB][0]].max.x + edgeOffset[1][0], activeStage.box[activeStage.ledge[
-              lsBB][0]].min.y + edgeOffset[1][1]);
+            player[i].phys.face = foundLedge[2] * -2 + 1;
+            player[i].phys.pos = new Vec2D(activeStage[foundLedge[0]][foundLedge[1]][foundLedge[2]].x + edgeOffset[1][0], activeStage[foundLedge[0]][foundLedge[1]][foundLedge[2]].y + edgeOffset[1][1]);
             actionStates[characterSelections[i]].CLIFFCATCH.init(i,input);
           }
         }

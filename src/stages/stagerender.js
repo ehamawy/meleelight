@@ -126,7 +126,7 @@ export function drawStageInit() {
     }
 
     if (holiday == 1){
-      var ex1 = 0;
+      /*var ex1 = 0;
       var ex2 = 0;
       fg1.save();
       fg1.lineCap="round";
@@ -173,11 +173,28 @@ export function drawStageInit() {
           fg1.drawImage(fabric,0,0);
           fg1.restore();
         }  
-
+      
       }
       fg1.restore();
       fg1.lineCap = "butt";
-      fg1.lineWidth = 1;
+      fg1.lineWidth = 1;*/
+    } else {
+      fg1.strokeStyle = "#E7A44C";
+      fg1.lineWidth = 2;
+      for (let i=0;i<activeStage.ledge.length;i++){
+        let e = activeStage.ledge[i];
+        let pA = activeStage[e[0]][e[1]][e[2]];
+        let pB = activeStage[e[0]][e[1]][1-e[2]];
+        let ang = Math.atan2((pB.y - pA.y) , (pB.x - pA.x));
+        let magnitude = Math.sqrt(Math.pow(pB.y - pA.y, 2) + Math.pow(pB.x - pA.x, 2));
+        let length = Math.min(0.25 * magnitude, 20) / activeStage.scale;
+        let pC = new Vec2D(pA.x + length * Math.cos(ang), pA.y + length * Math.sin(ang));
+        fg1.beginPath();
+        fg1.moveTo((pA.x * activeStage.scale) + activeStage.offset[0], (pA.y * -activeStage.scale) + activeStage.offset[1]);
+        fg1.lineTo((pC.x * activeStage.scale) + activeStage.offset[0], (pC.y * -activeStage.scale) + activeStage.offset[1]);
+        fg1.closePath();
+        fg1.stroke();
+      }
     }
 };
 
@@ -221,7 +238,7 @@ export function drawStage() {
     fg2.strokeStyle = "#e7a44c";
     
     var ex = 0;
-    if (holiday != 1){
+    /*if (holiday != 1){
       for (var j = 0; j < activeStage.ledge.length; j++) {
         var e = activeStage.ledge[j];   
         fg2.beginPath();
@@ -240,7 +257,7 @@ export function drawStage() {
         fg2.fill();
         fg2.fill();
       }
-    }
+    }*/
       
     if (typeof activeStage.target != "undefined") {
         fg2.strokeStyle = "rgba(255,255,255,0.4)";
