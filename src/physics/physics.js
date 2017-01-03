@@ -15,11 +15,10 @@ import {Box2D} from "../main/util/Box2D";
 import {Vec2D} from "../main/util/Vec2D";
 import {toList} from "../main/util/toList";
 import {extremePoint} from "../stages/util/extremePoint";
-import {connectednessFromChains} from "../stages/util/connectednessFromChains";
 import {moveECB, squashECBAt} from "../main/util/ecbTransform";
 
 // eslint-disable-next-line no-duplicate-imports
-import type {ConnectednessFunction} from "../stages/util/connectednessFromChains";
+import type {Connected} from "../stages/stage";
 // eslint-disable-next-line no-duplicate-imports
 import type {SquashDatum} from "../main/util/ecbTransform";
 
@@ -142,7 +141,7 @@ function fallOffGround(i : number, side : string
 
 // ground type and index is a pair, either ["g", index] or ["p", index]
 function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex : [string, number]
-                       , connectednessFunction : ConnectednessFunction, input : any) : [boolean, boolean] {
+                       , connected : ?Connected, input : any) : [boolean, boolean] {
   const leftmostGroundPoint  = extremePoint(ground,"l");
   const rightmostGroundPoint = extremePoint(ground,"r");
   let [stillGrounded, backward] = [true,false];
@@ -155,18 +154,22 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
   let maybeRightGroundTypeAndIndex = null;
 
   if ( player[i].phys.ECBp[0].x < leftmostGroundPoint.x) {
-    maybeLeftGroundTypeAndIndex = connectednessFunction(groundTypeAndIndex,"l");
-    if (maybeLeftGroundTypeAndIndex === null) { // no other ground to the left
+    if (connected !== null && connected !== undefined) {
+      maybeLeftGroundTypeAndIndex = groundTypeAndIndex[0] === "g" 
+                                  ? connected[0][groundTypeAndIndex[1]][0] 
+                                  : connected[1][groundTypeAndIndex[1]][0];
+    }
+    if (maybeLeftGroundTypeAndIndex === null || maybeLeftGroundTypeAndIndex === undefined) { // no other ground to the left
       [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint,input);
     }
     else {
       const [leftGroundType, leftGroundIndex] = maybeLeftGroundTypeAndIndex;
       switch (leftGroundType) {
         case "g":
-          [stillGrounded, backward] = dealWithGround(i, activeStage.ground[leftGroundIndex], ["g",leftGroundIndex], connectednessFunction, input);
+          [stillGrounded, backward] = dealWithGround(i, activeStage.ground[leftGroundIndex], ["g",leftGroundIndex], connected, input);
           break;
         case "p":
-          [stillGrounded, backward] = dealWithGround(i, activeStage.platform[leftGroundIndex], ["p",leftGroundIndex], connectednessFunction, input);
+          [stillGrounded, backward] = dealWithGround(i, activeStage.platform[leftGroundIndex], ["p",leftGroundIndex], connected, input);
           break;
         default: // surface to the left is neither a ground nor a platform
           [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, input);
@@ -175,18 +178,22 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
     }
   }
   else if ( player[i].phys.ECBp[0].x > rightmostGroundPoint.x) {
-    maybeRightGroundTypeAndIndex = connectednessFunction(groundTypeAndIndex,"r");
-    if (maybeRightGroundTypeAndIndex === null) { // no other ground to the right
+    if (connected !== null && connected !== undefined) {
+      maybeRightGroundTypeAndIndex = groundTypeAndIndex[0] === "g" 
+                                   ? connected[0][groundTypeAndIndex[1]][1] 
+                                   : connected[1][groundTypeAndIndex[1]][1];
+    }
+    if (maybeRightGroundTypeAndIndex === null || maybeRightGroundTypeAndIndex === undefined) { // no other ground to the right
       [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint,input);
     }
     else {
       const [rightGroundType, rightGroundIndex] = maybeRightGroundTypeAndIndex;
       switch (rightGroundType) {
         case "g":
-          [stillGrounded, backward] = dealWithGround(i, activeStage.ground[rightGroundIndex], ["g",rightGroundIndex], connectednessFunction, input);
+          [stillGrounded, backward] = dealWithGround(i, activeStage.ground[rightGroundIndex], ["g",rightGroundIndex], connected, input);
           break;
         case "p":
-          [stillGrounded, backward] = dealWithGround(i, activeStage.platform[rightGroundIndex], ["p",rightGroundIndex], connectednessFunction, input);
+          [stillGrounded, backward] = dealWithGround(i, activeStage.platform[rightGroundIndex], ["p",rightGroundIndex], connected, input);
           break;
         default: // surface to the right is neither a ground nor a platform
           [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, input);
@@ -567,15 +574,7 @@ function findAndResolveCollisions ( i : number, input : any
   let stillGrounded = oldStillGrounded;
   let backward = oldBackward;
   const notTouchingWalls = oldNotTouchingWalls;
-
-  const connectedSurfaces = activeStage.connected;
-  function connectednessFunction(gd, side) {
-    return null;
-  }
-  if (connectedSurfaces !== null && connectedSurfaces !== undefined ) {
-    // this should not be done every frame
-    connectednessFunction = function (gd, side) { return connectednessFromChains(gd, side, connectedSurfaces) ;};
-  }
+  const connected = activeStage.connected;
 
   // ------------------------------------------------------------------------------------------------------
   // grounded state movement
@@ -593,7 +592,7 @@ function findAndResolveCollisions ( i : number, input : any
 
     const relevantGroundTypeAndIndex = [relevantGroundType, relevantGroundIndex];
 
-    [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connectednessFunction, input);
+    [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connected, input);
 
   }
 

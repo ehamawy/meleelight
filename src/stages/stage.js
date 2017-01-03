@@ -4,6 +4,8 @@ import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 
 type Surface = [Vec2D, Vec2D];
+type SurfaceLabel = [string, index];
+export type Connected = [ Array< [ null | SurfaceLabel, null | SurfaceLabel ] >, Array< [ null | SurfaceLabel, null | SurfaceLabel ] >];
 
 export type Stage = {
   box           : Array< Box2D >,
@@ -22,7 +24,7 @@ export type Stage = {
   ledgePos      : Array< Vec2D >,
   scale         : number,
   offset        : [number, number],
-  connected?    : Array< Array< [ string, number] > >
+  connected?    : Connected
 }
 
 export type LabelledSurface = [[Vec2D, Vec2D], [string, number]];

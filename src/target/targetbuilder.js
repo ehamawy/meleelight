@@ -10,6 +10,7 @@ import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 import {setCustomTargetStages, customTargetStages} from "../stages/activeStage";
 import {intersectsAny, distanceToPolygon, distanceToLine} from "../stages/util/detectIntersections";
+import {getConnected} from "./util/getConnected";
 /* eslint-disable */
 
 export let drawConnectIndicator = false;
@@ -453,63 +454,7 @@ export function targetBuilderControls (p, input){
   
                       curIndex = nextIndex;
                     }
-                    console.log(stageTemp.polygonMap);
-                    // connect grounds
-                    let w = stageTemp.polygonMap[stageTemp.polygonMap.length-1][0];
-                    console.log(w);
-                    // if first is ground, loop backward till you find the origin
-                    let origin = 0;
-                    if (w[0] === "ground") {
-                      console.log("finding origin");
-                      var foundOrigin = false;
-                      for (let j=stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1;j>0;j--) {
-                        let o = stageTemp.polygonMap[stageTemp.polygonMap.length-1][j];
-                        console.log("looking at "+j);
-                        console.log(o);
-                        if (o[0] != "ground") {
-                          console.log("found");
-                          foundOrigin = true;
-                          if (j === stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1) {
-                            origin = 0;
-                          } else {
-                            origin = j + 1;
-                          }
-                          break;
-                        }
-                      }
-                    }
-                    console.log("new origin "+origin);
-                    // loop through from origin
-                    let index = origin;
-                    let curList = [];
-                    for (let i=0;i<stageTemp.polygonMap[stageTemp.polygonMap.length-1].length;i++) {
-                      let w = stageTemp.polygonMap[stageTemp.polygonMap.length-1][index];
-                      console.log("lookingn at "+i+" which means "+index);
-                      if (w[0] === "ground") {
-                        curList.push(["g",w[1]]);
-                        console.log("is ground so push");
-                      }
-                      if (w[0] != "ground" || i === stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1) {
-                        console.log("not ground or last item");
-                        if (curList.length >= 2) {
-                          // create connected list in stage object
-                          console.log("make connected with");
-                          console.log(curList);
-                          stageTemp.connected.push([]);
-                          for (let n=0;n<curList.length;n++) {
-                            stageTemp.connected[stageTemp.connected.length-1].push(["g",curList[n][1]]);
-                          }
-                        }
-                        curList = [];
-                      }
-
-                      index++;
-                      if (index > stageTemp.polygonMap[stageTemp.polygonMap.length-1].length - 1) {
-                        index = 0;
-                      }
-                    }
                     drawingPolygon = [];
-                    //undoList.push("box");
                   } else {
                     tooSmallTimer = 60;
                     tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
@@ -530,33 +475,20 @@ export function targetBuilderControls (p, input){
               }
             }
           }
+          stageTemp.connected = getConnected(stageTemp);
           break;
         case 1:
           //PLATFORM
           if (!holdingA) {
-            connectPoint = findConnected();
-            if (connectPoint){
-              drawConnectIndicator = true;
-              connectIndicatorPos = new Vec2D((connectPoint[0].x*3+600),(connectPoint[0].y*-3+375));
-            }
             if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
               // initiate build
-              // if ready to connect, set first point to connection point
-              if (connectPoint){
-                drawingPlatform[0] = new Vec2D((connectPoint[0].x*3+600),(connectPoint[0].y*-3+375));
-              } else {
-                drawingPlatform[0] = new Vec2D(realCrossHair.x, realCrossHair.y);
-              }
+              drawingPlatform[0] = new Vec2D(realCrossHair.x, realCrossHair.y);
               drawingPlatform[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
               holdingA = true;
             }
           } else {
             if (input[p][0].a) {
               // stretch
-              if (connectPoint){
-                drawConnectIndicator = true;
-                connectIndicatorPos = new Vec2D((connectPoint[0].x*3+600),(connectPoint[0].y*-3+375));
-              }
               drawingPlatform[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
             } else {
               //RELEASE
@@ -574,33 +506,6 @@ export function targetBuilderControls (p, input){
                 if (Math.abs(angle) <= Math.PI/6) {
                   stageTemp.draw.platform.push([new Vec2D(drawingPlatform[left].x, drawingPlatform[left].y), new Vec2D(drawingPlatform[right].x, drawingPlatform[right].y)]);
                   stageTemp.platform.push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
-                  // if wanting to connect, check each case
-                  if (connectPoint) {
-                    switch (connectPoint[1]) {
-                      case "first":
-                        // if left point is second drawn, put platform at start of connect list
-                        if (left === 1) {
-                          stageTemp.connected[connectPoint[2]].unshift(["p",stageTemp.platform.length-1]);
-                        }
-                        break;
-                      case "last":
-                        // if left point is first drawn, put platform at end of connect list
-                        if (left === 0) {
-                          stageTemp.connected[connectPoint[2]].push(["p",stageTemp.platform.length-1]);
-                        }
-                        break;
-                      case "new":
-                        // if left point is first drawn, and connection point is a right point
-                        if (left === 0 && connectPoint[4] === 1) {
-                          stageTemp.connected.push([[connectPoint[2],connectPoint[3]], ["p",stageTemp.platform.length-1]]);
-                        }
-                        // if left point is second drawn, and connection point is a left point
-                        else if (left === 1 && connectPoint[4] === 0) {
-                          stageTemp.connected.push([["p",stageTemp.platform.length-1], [connectPoint[2],connectPoint[3]]]);
-                        }
-                        break;
-                    }
-                  }
                 } else {
                   badAngleTimer = 60;
                   badAnglePos = new Vec2D(realCrossHair.x, realCrossHair.y);
@@ -614,34 +519,20 @@ export function targetBuilderControls (p, input){
               sounds.blunthit.play();
             }
           }
+          stageTemp.connected = getConnected(stageTemp);
           break;
         case 2:
           // WALL
           if (!holdingA) {
-            if (wallType === "ground") {
-              connectPoint = findConnected();
-              if (connectPoint){
-                drawConnectIndicator = true;
-                connectIndicatorPos = new Vec2D((connectPoint[0].x*3+600),(connectPoint[0].y*-3+375));
-              }
-            }
             if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
               // initiate build
-              if (wallType === "ground" && connectPoint) {
-                drawingWall[0] = new Vec2D((connectPoint[0].x*3+600),(connectPoint[0].y*-3+375));
-              } else {
-                drawingWall[0] = new Vec2D(realCrossHair.x, realCrossHair.y);
-              } 
+              drawingWall[0] = new Vec2D(realCrossHair.x, realCrossHair.y);
               drawingWall[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
               holdingA = true;
             }
           } else {
             if (input[p][0].a) {
               // stretch
-              if (wallType === "ground" && connectPoint) {
-                drawConnectIndicator = true;
-                connectIndicatorPos = new Vec2D((connectPoint[0].x*3+600),(connectPoint[0].y*-3+375));
-              }
               drawingWall[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
             } else {
               //RELEASE
@@ -657,32 +548,6 @@ export function targetBuilderControls (p, input){
                   stageTemp.draw[wallType].push([new Vec2D(drawingWall[left].x, drawingWall[left].y), new Vec2D(drawingWall[right].x, drawingWall[right].y)]);
                   stageTemp[wallType].push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
                   // if wanting to connect, check each case
-                  if (wallType === "ground" && connectPoint) {
-                    switch (connectPoint[1]) {
-                      case "first":
-                        // if left point is second drawn, put platform at start of connect list
-                        if (left === 1) {
-                          stageTemp.connected[connectPoint[2]].unshift(["g",stageTemp.ground.length-1]);
-                        }
-                        break;
-                      case "last":
-                        // if left point is first drawn, put platform at end of connect list
-                        if (left === 0) {
-                          stageTemp.connected[connectPoint[2]].push(["g",stageTemp.ground.length-1]);
-                        }
-                        break;
-                      case "new":
-                        // if left point is first drawn, and connection point is a right point
-                        if (left === 0 && connectPoint[4] === 1) {
-                          stageTemp.connected.push([[connectPoint[2],connectPoint[3]], ["g",stageTemp.ground.length-1]]);
-                        }
-                        // if left point is second drawn, and connection point is a left point
-                        else if (left === 1 && connectPoint[4] === 0) {
-                          stageTemp.connected.push([["g",stageTemp.ground.length-1], [connectPoint[2],connectPoint[3]]]);
-                        }
-                        break;
-                    }
-                  }
                 } else {
                   badAngleTimer = 60;
                   badAnglePos = new Vec2D(realCrossHair.x, realCrossHair.y);
@@ -695,6 +560,9 @@ export function targetBuilderControls (p, input){
               holdingA = false;
               sounds.blunthit.play();
             }
+          }
+          if (wallType === "ground" || wallType === "platform") {
+            stageTemp.connected = getConnected(stageTemp);
           }
           break;
         case 3:
@@ -1057,17 +925,6 @@ export function renderTargetBuilder (){
   }
   drawTargetStage();
   ui.fillStyle = "white";
-  ui.beginPath();
-  for (let i=0;i<stageTemp.connected.length;i++) {
-    for (let j=0;j<stageTemp.connected[i].length-1;j++) {
-      let w = stageTemp.connected[i][j]
-      let type = (w[0] === "p") ? "platform" : "ground";
-      ui.moveTo(stageTemp.draw[type][w[1]][1].x, stageTemp.draw[type][w[1]][1].y);
-      ui.arc(stageTemp.draw[type][w[1]][1].x, stageTemp.draw[type][w[1]][1].y, 5, 0, twoPi);
-    }
-  }
-  ui.closePath();
-  ui.fill();
   if (amDrawingPolygon){
     ui.strokeStyle = "white";
     ui.lineWidth = 4;
@@ -1481,7 +1338,7 @@ export function findPolygon (realCrossHair){
   let found = false;
   for (let i=0;i<stageTemp.polygon.length;i++){
     const d = distanceToPolygon(new Vec2D(realCrossHair.x, realCrossHair.y), stageTemp.polygon[i]);
-    if (d < 15) {
+    if (d < 5) {
       hoverItem = ["polygon",i];
       found = true;
       break;
@@ -1536,64 +1393,6 @@ export function centerItem (item,realCrossHair){
       break;
   }
 
-}
-
-function findConnected(realCrossHair) {
-  // check grounds
-  let foundPoint = false;
-  let point = [];
-  for (var i=0;i<stageTemp.ground.length;i++) {
-    if (!foundPoint){
-      for (var j=0;j<2;j++) {
-        if (Math.abs(crossHairPos.x - stageTemp.ground[i][j].x) <= 5 && Math.abs(crossHairPos.y - stageTemp.ground[i][j].y) <= 5) {
-          point = ["g", i, j, new Vec2D(stageTemp.ground[i][j].x,stageTemp.ground[i][j].y)];
-          foundPoint = true;
-          break;
-        }
-      }
-    }
-  }
-  // check platforms
-  for (var i=0;i<stageTemp.platform.length;i++) {
-    if (!foundPoint){
-      for (var j=0;j<2;j++) {
-        if (Math.abs(crossHairPos.x - stageTemp.platform[i][j].x) <= 5 && Math.abs(crossHairPos.y - stageTemp.platform[i][j].y) <= 5) {
-          point = ["p", i, j, new Vec2D(stageTemp.platform[i][j].x,stageTemp.platform[i][j].y)];
-          foundPoint = true;
-          break;
-        }
-      }
-    }
-  }
-  // if found point, check if connectable
-  if (foundPoint) {
-    for (var i=0;i<stageTemp.connected.length;i++) {
-      for (var j=0;j<stageTemp.connected[i].length;j++) {
-        // if found point is part of a connected list, must be first or last
-        if (stageTemp.connected[i][j][0] === point[0] && stageTemp.connected[i][j][1] === point[1]) {
-          // if first on list and found point is left point
-          if (j === 0 && point[2] === 0) {
-            // can make connection
-            return [point[3], "first", i, j];
-          }
-          // if last on list and found point is right point 
-          else if (j === stageTemp.connected[i].length - 1 && point[2] === 1) {
-            // can make connection
-            return [point[3], "last", i, j];
-          } else {
-            // unavailable point
-            return false;
-          }
-          // stop both for loops
-          i = stageTemp.connected.length;
-          break;
-        }
-      }
-    }
-    return [point[3], "new", point[0], point[1], point[2]];
-  } else {
-    return false;
-  }
 }
 
 export function setEditingStage(val){

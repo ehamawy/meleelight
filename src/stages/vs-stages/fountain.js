@@ -42,7 +42,7 @@ export default {
   ledgePos: [new Vec2D(-66.35, 0.62), new Vec2D(66.35, 0.62)],
   scale: 5,
   offset: [600, 450],
-  connected : [ [ ["g",0],["g",1],["g",2],["g",3],["g",4]]],
+  connected : [ [[null, ["g",1]], [["g",0], ["g",2]], [["g",1], ["g",3]],[["g",2], ["g",4]], [["g",3], null]], [[null,null],[null,null],[null,null]]],
   movingPlat: -1,
   movingPlatforms: function () {
   }
