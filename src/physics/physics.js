@@ -17,6 +17,7 @@ import {toList} from "../main/util/toList";
 import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {moveECB, squashECBAt} from "../main/util/ecbTransform";
+import {subtract} from "../main/linAlg";
 
 // eslint-disable-next-line no-duplicate-imports
 import type {Connected} from "../stages/stage";
@@ -103,25 +104,28 @@ function dealWithGroundCollision(i : number, alreadyGrounded : boolean
 
 function fallOffGround(i : number, side : string
                       , groundEdgePosition : Vec2D
-                      , disableOTTOTTO : bool, input : any) : [boolean, boolean] {
+                      , disableFall : bool, input : any) : [boolean, boolean] {
   let [stillGrounded, backward] = [true,false];
   let sign = 1;
   if (side === "r") {
     sign = -1;
   }
-  if (actionStates[characterSelections[i]][player[i].actionState].canEdgeCancel) {
+  if (disableFall) {
+    player[i].phys.pos.y = Math.max(player[i].phys.pos.y, groundEdgePosition.y) + additionalOffset;
+    player[i].phys.pos.x = groundEdgePosition.x + (side === "l" ? additionalOffset : -additionalOffset);
+  }
+  else if ( actionStates[characterSelections[i]][player[i].actionState].canEdgeCancel) {
     if (player[i].phys.face === sign) {
       stillGrounded = false;
-      player[i].phys.pos.y += additionalOffset;
+      player[i].phys.pos.y = Math.max(player[i].phys.pos.y, groundEdgePosition.y) + additionalOffset;
       backward = true;
     }
     else if (   sign * input[i][0].lsX < -0.6
-             || disableOTTOTTO
              || (player[i].phys.cVel.x === 0 && player[i].phys.kVel.x === 0)
              || actionStates[characterSelections[i]][player[i].actionState].disableTeeter
              || player[i].phys.shielding) {
       stillGrounded = false;
-      player[i].phys.pos.y += additionalOffset;
+      player[i].phys.pos.y = Math.max(player[i].phys.pos.y, groundEdgePosition.y) + additionalOffset;
     }
     else {
       player[i].phys.cVel.x = 0;
@@ -129,11 +133,11 @@ function fallOffGround(i : number, side : string
       actionStates[characterSelections[i]].OTTOTTO.init(i,input);
     }
   }
-  else if (player[i].phys.cVel.x === 0 &&
-             player[i].phys.kVel.x === 0 &&
-             !actionStates[characterSelections[i]][player[i].actionState].inGrab) {
+  else if (    player[i].phys.cVel.x === 0
+            && player[i].phys.kVel.x === 0
+            && !actionStates[characterSelections[i]][player[i].actionState].inGrab) {
     stillGrounded = false;
-    player[i].phys.pos.y += additionalOffset;
+    player[i].phys.pos.y = Math.max(player[i].phys.pos.y, groundEdgePosition.y) + additionalOffset;
   }
   else {
     player[i].phys.cVel.x = 0;
@@ -152,7 +156,7 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
   if (groundTypeAndIndex[0] === "p") {
     groundOrPlatform = 1;
   }
-  let disableOTTOTTO = false;
+  let disableFall = false;
 
   let maybeLeftGroundTypeAndIndex  = null;
   let maybeRightGroundTypeAndIndex = null;
@@ -164,7 +168,7 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
                                   : connected[1][groundTypeAndIndex[1]][0];
     }
     if (maybeLeftGroundTypeAndIndex === null || maybeLeftGroundTypeAndIndex === undefined) { // no other ground to the left
-      [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, disableOTTOTTO, input);
+      [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, disableFall, input);
     }
     else {
       const [leftGroundType, leftGroundIndex] = maybeLeftGroundTypeAndIndex;
@@ -178,12 +182,12 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
         case "r":
           const rightWallToTheLeft = activeStage.wallR[leftGroundIndex];
           if (extremePoint(rightWallToTheLeft,"l").y > leftmostGroundPoint.y) {
-            disableOTTOTTO = true;
+            disableFall = true;
           }
-          [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, disableOTTOTTO, input);
+          [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, disableFall, input);
           break;
         default: // surface to the left is neither a ground nor a platform
-          [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, disableOTTOTTO, input);
+          [stillGrounded, backward] = fallOffGround(i, "l", leftmostGroundPoint, disableFall, input);
           break;
       }
     }
@@ -195,7 +199,7 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
                                    : connected[1][groundTypeAndIndex[1]][1];
     }
     if (maybeRightGroundTypeAndIndex === null || maybeRightGroundTypeAndIndex === undefined) { // no other ground to the right
-      [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, disableOTTOTTO, input);
+      [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, disableFall, input);
     }
     else {
       const [rightGroundType, rightGroundIndex] = maybeRightGroundTypeAndIndex;
@@ -209,12 +213,12 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
         case "l":
           const leftWallToTheRight = activeStage.wallL[rightGroundIndex];
           if (extremePoint(leftWallToTheRight, "r").y > rightmostGroundPoint.y) {
-            disableOTTOTTO = true;
+            disableFall = true;
           }
-          [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, disableOTTOTTO, input);
+          [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, disableFall, input);
           break;
         default: // surface to the right is neither a ground nor a platform
-          [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, disableOTTOTTO, input);
+          [stillGrounded, backward] = fallOffGround(i, "r", rightmostGroundPoint, disableFall, input);
           break;
       }
     }
@@ -599,6 +603,8 @@ function findAndResolveCollisions ( i : number, input : any
 
   if (player[i].phys.grounded) {
 
+    const oldPosition = new Vec2D( player[i].phys.pos.x, player[i].phys.pos.y );
+
     const relevantGroundIndex = player[i].phys.onSurface[1];
     let relevantGroundType = "g";
     let relevantGround = activeStage.ground[relevantGroundIndex];
@@ -611,6 +617,8 @@ function findAndResolveCollisions ( i : number, input : any
     const relevantGroundTypeAndIndex = [relevantGroundType, relevantGroundIndex];
 
     [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connected, input);
+
+    player[i].phys.ECBp = moveECB(player[i].phys.ECBp, subtract(player[i].phys.pos, oldPosition));
 
   }
 
