@@ -24,13 +24,25 @@ export function getConnected(stage : Stage) : Connected {
         broke[1] = true;
       }
     }
-    for (let j =0; j < lp; j++) {
+    for (let j = 0; j < lp; j++) {
       if (!broke[0] && d (extremePoint(stage.ground[i], "l"), extremePoint(stage.platform[j], "r")) < 0.001) {
         connected[0][i][0] = ["p",j];
         broke[0] = true;
       }
       if (!broke[1] && d (extremePoint(stage.ground[i], "r"), extremePoint(stage.platform[j], "l")) < 0.001) {
         connected[0][i][1] = ["p",j];
+        broke[1] = true;
+      }
+    }
+    for (let j = 0; j < stage.wallR.length; j++) {
+      if (!broke[0] && d (extremePoint(stage.ground[i], "l"), extremePoint(stage.wallR[j], "r")) < 0.001) {
+        connected[0][i][0] = ["r",j];
+        broke[0] = true;
+      }
+    }
+    for (let j = 0; j < stage.wallL.length; j++) {
+      if (!broke[1] && d (extremePoint(stage.ground[i], "r"), extremePoint(stage.wallL[j], "l")) < 0.001) {
+        connected[0][i][1] = ["l",j];
         broke[1] = true;
       }
     }
@@ -51,13 +63,25 @@ export function getConnected(stage : Stage) : Connected {
         broke[1] = true;
       }
     }
-    for (let j =0; j < lp; j++) {
+    for (let j = 0; j < lp; j++) {
       if (!broke[0] && d (extremePoint(stage.platform[i], "l"), extremePoint(stage.platform[j], "r")) < 0.001) {
         connected[1][i][0] = ["p",j];
         broke[0] = true;
       }
       if (!broke[1] && d (extremePoint(stage.platform[i], "r"), extremePoint(stage.platform[j], "l")) < 0.001) {
         connected[1][i][1] = ["p",j];
+        broke[1] = true;
+      }
+    }
+    for (let j = 0; j < stage.wallR.length; j++) {
+      if (!broke[0] && d (extremePoint(stage.platform[i], "l"), extremePoint(stage.wallR[j], "r")) < 0.001) {
+        connected[1][i][0] = ["r",j];
+        broke[0] = true;
+      }
+    }
+    for (let j = 0; j < stage.wallL.length; j++) {
+      if (!broke[1] && d (extremePoint(stage.platform[i], "r"), extremePoint(stage.wallL[j], "l")) < 0.001) {
+        connected[1][i][1] = ["l",j];
         broke[1] = true;
       }
     }
