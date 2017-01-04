@@ -163,7 +163,7 @@ function runPointSweep ( ecb1 : ECB, ecbp : ECB, same : number
 
   if (wallType === "l" || wallType === "r") { // left or right wall, need to check top or bottom ECB vertex too
     const sameResult = pointSweepingCheck(ecb1, ecbp, same, wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, xOrY);
-    const other = wallAngle < Math.PI/2 ? 0 : 2;
+    const other = (wallType === "l" && wallAngle < Math.PI/2) || (wallType === "r" && wallAngle > Math.PI/2) ? 0 : 2;
     const otherResult  = pointSweepingCheck(ecb1, ecbp, other, wall, wallType, wallIndex, wallTopOrRight, wallBottomOrLeft, xOrY);
     result = pickSmallestSweep([sameResult, otherResult]);
   }
