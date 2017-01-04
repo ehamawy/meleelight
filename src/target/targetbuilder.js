@@ -924,7 +924,22 @@ export function renderTargetBuilder (){
     ui.stroke();
   }
   drawTargetStage();
-  ui.fillStyle = "white";
+  ui.fillStyle = "rgba(255,255,255,0.5)";
+  ui.beginPath();
+  for (let i=0;i<stageTemp.connected.length;i++) {
+    for (let j=0;j<stageTemp.connected[i].length;j++) {
+      for (let k=0;k<stageTemp.connected[i][j].length;k++) {
+        let w = stageTemp.connected[i][j][k];
+        if (w != null) {
+          let type = (w[0] === "p") ? "platform" : "ground";
+          ui.moveTo(stageTemp.draw[type][w[1]][1-k].x,stageTemp.draw[type][w[1]][1-k].y);
+          ui.arc(stageTemp.draw[type][w[1]][1-k].x,stageTemp.draw[type][w[1]][1-k].y, 5, 0, twoPi);
+        }
+      }
+    }
+  }
+  ui.closePath();
+  ui.fill();
   if (amDrawingPolygon){
     ui.strokeStyle = "white";
     ui.lineWidth = 4;
