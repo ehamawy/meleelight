@@ -9,6 +9,7 @@ import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {moveECB, squashECBAt, ecbFocusFromAngularParameter, interpolateECB} from "../main/util/ecbTransform";
 import {zipLabels} from "../main/util/zipLabels";
+import {drawECB} from "../main/util/drawECB";
 
 // eslint-disable-next-line no-duplicate-imports
 import type {ECB, SquashDatum} from "../main/util/ecbTransform";
@@ -17,32 +18,8 @@ import type {Stage, LabelledSurface} from "../stages/stage";
 // eslint-disable-next-line no-duplicate-imports
 import type {XOrY} from "../main/util/Vec2D";
 
-
-// for debugging, draw ECBs and points on top of everything else
-import {fg2} from "../main/main";
-import {activeStage} from "../stages/activeStage";
-
-function drawECB(ecb : ECB, color : string) : void {
-  fg2.strokeStyle = color;
-  fg2.lineWidth = 1;
-  fg2.beginPath();
-  fg2.moveTo((ecb[0].x * activeStage.scale) + activeStage.offset[0], (ecb[0].y * -activeStage.scale) + activeStage.offset[1]);
-  fg2.lineTo((ecb[1].x * activeStage.scale) + activeStage.offset[0], (ecb[1].y * -activeStage.scale) + activeStage.offset[1]);
-  fg2.lineTo((ecb[2].x * activeStage.scale) + activeStage.offset[0], (ecb[2].y * -activeStage.scale) + activeStage.offset[1]);
-  fg2.lineTo((ecb[3].x * activeStage.scale) + activeStage.offset[0], (ecb[3].y * -activeStage.scale) + activeStage.offset[1]);
-  fg2.closePath();
-  fg2.stroke();
-};
-
-function drawPoint( point : Vec2D, color : string) : void {
-  fg2.fillStyle = color;
-  fg2.fillRect((point.x * activeStage.scale) + activeStage.offset[0] ,(point.y * -activeStage.scale) + activeStage.offset[1],3,3);
-};
-// end of debugging helper code
-
-
 export const additionalOffset : number = 0.00001;
-
+const smallestECBWidth = 1.95;
 const maxRecursion = 30;
 
 // -----------------------------------------------------
@@ -518,11 +495,14 @@ function findClosestCollision( ecb1 : ECB, ecbp : ECB
 
 type SimpleTouchingDatum = { kind : "surface", type : string, index : number, pt : number } | { kind : "corner", angular : number }
 
-type ECBTouching = { ecb : ECB, squash : SquashDatum, touching : null | SimpleTouchingDatum };
+type CollisionObject = { kind : "surface", surface : [Vec2D, Vec2D], type : string, pt : number, index : number } 
+                     | { kind : "corner", corner : Vec2D, angular : number }
+
+type ECBTouching = { ecb : ECB, touching : null | SimpleTouchingDatum };
 type Sliding = { type : null | "l" | "r" | "c", angular : null | number };
 type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchingDatum } 
-                | { event : "transfer", midECB : ECB, object : { kind : "surface", surface : [Vec2D, Vec2D], type : string, pt : number, index : number } 
-                                                             | { kind : "corner", corner : Vec2D, angular : number } }
+                | { event : "transfer", midECB : ECB, object : CollisionObject }
+                | { event : "squash"  , midECB : ECB, tgtECB : ECB, object : CollisionObject}
                 | { event : "continue" }
 
 function resolveECB ( ecb1 : ECB, ecbp : ECB, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
@@ -535,38 +515,41 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                         , slidingAgainst : Sliding
                         , final : bool
                         , recursionCounter : number ) : ECBTouching {
+  let output; 
   if (recursionCounter > maxRecursion) {
     console.log("'runSlideRoutine': excessive recursion, aborting.");
     drawECB(srcECB, "#286ee0");
     drawECB(tgtECB, "#f49930");
     drawECB(ecbp, "#fff9ad");
-    return { ecb : ecbp, squash : { factor : 1, location : null}, touching : null };
+    output = { ecb : ecbp, touching : null };
   }
   else {
     const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst );
     let newECBp = ecbp;
   
     if (slideDatum.event === "end") {
-      return { ecb : slideDatum.finalECB, squash : { factor : 1, location : null}, touching : slideDatum.touching };
+      output = { ecb : slideDatum.finalECB, touching : slideDatum.touching };
     }
     else if (slideDatum.event === "continue") {
       if (final) {
-        return { ecb : tgtECB, squash : { factor : 1, location : null}, touching : oldTouchingDatum };
+        output = { ecb : tgtECB, touching : oldTouchingDatum };
       }
       else {
         newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
-        return runSlideRoutine ( tgtECB, newECBp, newECBp, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
+        output = runSlideRoutine ( tgtECB, newECBp, newECBp, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
       }
     }
-    else { // transfer
+    else { // slideDatum.event === "transfer" || slideDatum.event === "squash"
       const newSrcECB = slideDatum.midECB;
-      const slideObject = slideDatum.object;    
+      const slideObject = slideDatum.object;
   
       let newTouchingDatum;
       let angular;
       let newFinal;
       let newTgtECB;
       let newSlidingType = null;
+      let same;
+      let other;
   
       if ( slideObject.kind === "surface" ) {
         const surface = slideObject.surface;
@@ -574,10 +557,11 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
         if (surfaceType === "l" || surfaceType === "r" || surfaceType === "c") {
           newSlidingType = surfaceType;
         }
-        angular = slideObject.pt;
-        newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, angular );
-        newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : angular };
-        [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, angular );
+        same = slideObject.pt;
+        angular = same;
+        newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, same );
+        newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : same };
+        [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, same );
       }
       else {
         const corner = slideObject.corner;
@@ -588,20 +572,40 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
         else if (angular > 2) {
           newSlidingType = "r";
         }
-        const [same, other] = getSameAndOther(angular);
+        [same, other] = getSameAndOther(angular);
         newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, same );
         [newTgtECB, newFinal] = findNextTargetFromCorner ( newSrcECB, newECBp, corner, angular );
         newTouchingDatum = { kind : "corner", angular : angular };
       }
-      return runSlideRoutine ( newSrcECB, newTgtECB, newECBp
-                             , labelledSurfaces
-                             , newTouchingDatum
-                             , { type : newSlidingType
-                               , angular : angular }
-                             , newFinal
-                             , recursionCounter + 1 );
+
+      if (slideDatum.event === "transfer") {
+        output = runSlideRoutine ( newSrcECB, newTgtECB, newECBp
+                                 , labelledSurfaces
+                                 , newTouchingDatum
+                                 , { type : newSlidingType
+                                   , angular : angular }
+                                 , newFinal
+                                 , recursionCounter + 1 );
+      }
+      else {
+        const otherTgtECB = slideDatum.tgtECB;
+        const [squashTgtECB, abort] = agreeOnTargetECB(newSrcECB, otherTgtECB, newTgtECB, newECBp, same);
+        if (abort) {
+          output = { ecb : srcECB, touching : oldTouchingDatum };
+        }
+        else {
+          output = runSlideRoutine ( newSrcECB, squashTgtECB, newECBp
+                                   , labelledSurfaces
+                                   , newTouchingDatum
+                                   , { type : newSlidingType
+                                     , angular : angular }
+                                   , newFinal && final
+                                   , recursionCounter + 1 );
+        }
+      }     
     }
   }
+  return output;
 };
 
 // this function figures out if we can move the ECB, from the source ECB to the target ECB
@@ -609,13 +613,15 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
                   , labelledSurfaces : Array<LabelledSurface>
                   , slidingAgainst : Sliding
                   ) : SlideDatum {
+  let output;
+
   // figure our whether a collision occured while moving srcECB -> tgtECB
   const touchingDatum = findClosestCollision( srcECB, tgtECB
                                             , labelledSurfaces );
 
   if (touchingDatum === null) {
     //console.log("'slideECB': sliding.");
-    return { event : "continue"};
+    output = { event : "continue"};
   }
   else { 
     const s = touchingDatum.sweep;
@@ -627,91 +633,112 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
       if ( collisionObject.kind === "surface" ) {
         if (collisionObject.type === "g" || collisionObject.type === "p") {
           //console.log("'slideECB': sliding interrupted by landing.");
-          return { event : "end"
-                 , finalECB : midECB
-                 , touching : { kind : "surface"
-                              , type : collisionObject.type
-                              , index : collisionObject.index
-                              , pt : collisionObject.pt 
-                              }
-                 };
+          output = { event : "end"
+                   , finalECB : midECB
+                   , touching : { kind : "surface"
+                                , type : collisionObject.type
+                                , index : collisionObject.index
+                                , pt : collisionObject.pt 
+                                }
+                   };
         }
         else {
           //console.log("'slideECB': beginning slide on surface.");
-          return { event : "transfer"
-                 , midECB : midECB
-                 , object : { kind : "surface"
-                            , surface : collisionObject.surface
-                            , type    : collisionObject.type
-                            , pt      : collisionObject.pt 
-                            , index   : collisionObject.index
-                            } 
-                 };
+          output = { event : "transfer"
+                   , midECB : midECB
+                   , object : { kind : "surface"
+                              , surface : collisionObject.surface
+                              , type    : collisionObject.type
+                              , pt      : collisionObject.pt 
+                              , index   : collisionObject.index
+                              } 
+                   };
         }
       }
       else {
         //console.log("'slideECB': beginning slide on corner.");
-        return { event : "transfer"
-               , midECB : midECB
-               , object : { kind    : "corner"
-                          , corner  : collisionObject.corner
-                          , angular : collisionObject.angular 
-                          } 
-               };
+        output = { event : "transfer"
+                 , midECB : midECB
+                 , object : { kind    : "corner"
+                            , corner  : collisionObject.corner
+                            , angular : collisionObject.angular 
+                            } 
+                 };
       }
     }
     else {
       const slidingType = slidingAgainst.type;
       if ( collisionObject.kind === "surface" ) {
         const surfaceType = collisionObject.type;
-        if ( slidingType === null || surfaceType === slidingType ) {
+        if (surfaceType === slidingType) {
           //console.log("'slideECB': transferring slide to new surface.");
-          return { event : "transfer"
-                 , midECB : midECB
-                 , object : { kind : "surface"
-                            , surface : collisionObject.surface
-                            , type    : collisionObject.type
-                            , pt      : collisionObject.pt
-                            , index   : collisionObject.index
-                            } 
-                 };
+          output = { event : "transfer"
+                   , midECB : midECB
+                   , object : { kind : "surface"
+                              , surface : collisionObject.surface
+                              , type    : collisionObject.type
+                              , pt      : collisionObject.pt
+                              , index   : collisionObject.index
+                              } 
+                   };
+        }
+        else if (slidingType === "c" || surfaceType === "c" || surfaceType === "g") {
+          // no way to continue when one of the involved surfaces is a ceiling or a ground
+          //console.log("'slideECB': interrupting sliding because of conflicting surface collision.");
+          output = { event : "end"
+                   , finalECB : midECB
+                   , touching : { kind : "surface"
+                                , type : collisionObject.type
+                                , index : collisionObject.index
+                                , pt : collisionObject.pt 
+                                }
+                   };
         }
         else {
-          //console.log("'slideECB': interrupting sliding because of conflicting surface collision.");
-          return { event : "end"
-                 , finalECB : midECB
-                 , touching : { kind : "surface"
-                              , type : collisionObject.type
-                              , index : collisionObject.index
-                              , pt : collisionObject.pt 
-                              }
-                 };
+          //console.log("'slideECB': beginning ECB squashing because of conflicting horizontal surface pushout.");
+          output = { event : "squash"
+                   , midECB : midECB
+                   , tgtECB : tgtECB
+                   , object : collisionObject
+                   , pt : collisionObject.pt
+                   };
         }
       }
       else {
         const angularParameter = collisionObject.angular;
-        if ( slidingType === null 
-             || (angularParameter <= 2 && slidingType === "l") 
-             || ((angularParameter === 0 || angularParameter >=2) && slidingType === "r") ) {
-          //console.log("'slideECB': transferring slide to new corner.");
-          return { event : "transfer"
-                 , midECB : midECB, object : { kind : "corner"
-                                             , corner  : collisionObject.corner
-                                             , angular : angularParameter
-                                             }
-                 };
-        }
-        else {
+        const side = getSameAndOther(angularParameter)[0];
+        if (slidingType === "c") {
           //console.log("'slideECB': interrupting sliding because of conflicting corner collision.");
-          return { event : "end"
-                 , finalECB : midECB
-                 , touching : { kind : "corner"
-                              , angular : angularParameter }
-                 };
+          output = { event : "end"
+                   , finalECB : midECB
+                   , touching : { kind : "corner"
+                                , angular : angularParameter }
+                   };
+        }
+        else if (    slidingType === null 
+                  || (side === 3 && slidingType === "r") 
+                  || (side === 1 && slidingType === "l") ) {
+          //console.log("'slideECB': transferring slide to new corner.");
+          output = { event : "transfer"
+                   , midECB : midECB, object : { kind : "corner"
+                                               , corner  : collisionObject.corner
+                                               , angular : angularParameter
+                                               }
+                   };
+        }
+        else {          
+          //console.log("'slideECB': beginning ECB squashing because of conflicting horizontal corner pushout.");
+          output = { event : "squash"
+                   , midECB : midECB
+                   , tgtECB : tgtECB
+                   , side : side
+                   , object : collisionObject
+                   };
         }
       }
     }
   }
+  return output;
 };
 
 function findNextTargetFromSurface ( srcECB : ECB, ecbp : ECB, wall : [Vec2D, Vec2D], wallType : string, pt : number ) : [ECB, bool] {
@@ -804,7 +831,6 @@ function findNextTargetFromCorner ( srcECB : ECB, ecbp : ECB, corner : Vec2D, an
 
   drawECB(ecbp  , "#1098c9");
   drawECB(tgtECB, "#5cbc12");
-  drawPoint(corner, "#ffc23f");
 
   return [tgtECB, final];
 
@@ -815,19 +841,111 @@ function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : nul
     return ecbp;
   }
   else {
-    const xOrY = (slidingType === "l" || slidingType === "r") ? "x" : "y";
-    let pushout = 0;
-    if ( getXOrYCoord(startECB[pt], flipXOrY(xOrY)) === getXOrYCoord(ecbp[pt], flipXOrY(xOrY)) ) {
-      pushout = getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY);
+    let xOrY = (slidingType === "l" || slidingType === "r") ? "y" : "x";
+    let t;
+    if (getXOrYCoord(ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY) === 0) {
+      xOrY = xOrY === "x" ? "y" : "x";
+      t = (getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY)) 
+        / (getXOrYCoord(  ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY));
     }
     else {
-      const intercept = coordinateIntercept(lineThrough(endECB[pt], xOrY), [startECB[pt], ecbp[pt]]);
-      pushout = getXOrYCoord(intercept, xOrY) - getXOrYCoord(endECB[pt], xOrY);
+      t = (getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY)) 
+        / (getXOrYCoord(  ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY));
     }
-    return moveECB(ecbp, putXOrYCoord(pushout, xOrY));
+
+    let midECB;
+    if (t < 0) {
+      midECB = startECB;
+    }
+    else if (t > 1) {
+      midECB = ecbp;
+    }
+    else {
+      midECB = interpolateECB(startECB, ecbp, t);
+    }
+    return [ add(ecbp[0], subtract(endECB[0], midECB[0]))
+           , add(ecbp[1], subtract(endECB[1], midECB[1]))
+           , add(ecbp[2], subtract(endECB[2], midECB[2]))
+           , add(ecbp[3], subtract(endECB[3], midECB[3]))
+           ];
   }
 };
 
+
+function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp : ECB, pt : number ) : [ECB, bool] {
+  let output;
+
+  const flipPt = pt === 1 ? 3 : 1;
+  const [closestTgtECB, furthestTgtECB, same] = (Math.abs(fstTgtECB[pt].y - srcECB[pt].y) < Math.abs(sndTgtECB[flipPt].y - srcECB[flipPt].y))
+                                              ? [fstTgtECB, sndTgtECB, pt] 
+                                              : [sndTgtECB, fstTgtECB, flipPt];
+  const diff = same === 1 ? 3 : 1;
+  const height = closestTgtECB[same].y;
+  const t = (closestTgtECB[same].y - srcECB[same].y) / (furthestTgtECB[diff].y - srcECB[diff].y);
+  const otherTgtECB = interpolateECB(srcECB, furthestTgtECB, t);
+
+  const tgtECB = closestTgtECB;
+  let abort;
+
+  const sign = Math.sign(closestTgtECB[same].x - closestTgtECB[diff].x);
+
+  // ideally we would now squash the ECB, so that it has side points otherTgtECB[same] and closestTgtECB[diff]
+  // however we can't do that if these points are too close together, or, even worse, have moved past eachother
+  if (  Math.abs(otherTgtECB[same].x - closestTgtECB[diff].x) > smallestECBWidth
+     && Math.sign(otherTgtECB[same].x - closestTgtECB[diff].x) === sign) {
+    if (Math.abs(otherTgtECB[same].x - closestTgtECB[diff].x) > Math.abs(closestTgtECB[same].x - closestTgtECB[diff].x)) {
+      abort = false;
+      console.log("error in 'agreeOnTargetECB': function called when no squashing was required.");
+      output = [tgtECB, abort];
+    }
+    else {
+      abort = false;
+      const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      tgtECB[same] = add(otherTgtECB[same], new Vec2D(- sign * additionalOffset,0));
+      tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
+      tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+      tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
+      tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
+      output = [tgtECB, abort];
+    }
+  }
+  else {
+    // can't directly squash, so we need to find the closest allowable height
+
+    const sameLine = [srcECB[same], otherTgtECB[same]];
+    const diffLine = [srcECB[diff], closestTgtECB[diff]];
+    const offsetDiffLine = [ add(diffLine[0], new Vec2D (sign*smallestECBWidth,0))
+                           , add(diffLine[1], new Vec2D (sign*smallestECBWidth,0)) ];
+    const intercept = coordinateIntercept(sameLine, offsetDiffLine);
+    if (Math.abs(closestTgtECB[same].y - srcECB[same].y) >= Math.abs(intercept.y - srcECB[same].y)) {
+      abort = true;
+      tgtECB[same] = intercept;
+      tgtECB[diff] = new Vec2D( intercept.x - sign*smallestECBWidth, intercept.y);
+      const squashFactor = (tgtECB[same].x - tgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
+      tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+      tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
+      tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
+      output = [tgtECB, abort];
+    }
+    else {
+      abort = false;
+      const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      if (squashFactor > 1) {
+        output = [tgtECB, abort];
+      }
+      else {
+        tgtECB[same] = otherTgtECB[same];
+        tgtECB[2].y = tgtECB[2].x, tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
+        tgtECB[0].y = tgtECB[0].x, tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+        tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
+        tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
+        output = [tgtECB, abort];
+      }
+    }
+  }
+  return output;
+}
 
 // ----------------------------------------------------------------------------------------------------------------------------------
 // convert between angular parameters and "same/other" data
@@ -903,7 +1021,12 @@ function inflateECB ( ecb : ECB, t : null | number
     return { location : t, factor : 1};
   }
   else {
-    return { location : t, factor : Math.max(offset, closestCollision.sweep - offset)}; // ECB angular parameter, sweeping parameter
+    const newLocation = t === null
+                      ? closestCollision.object.kind === "surface" 
+                        ? closestCollision.object.pt 
+                        : closestCollision.object.angular
+                      : t;
+    return { location : newLocation, factor : Math.max(offset, closestCollision.sweep - offset)}; // ECB angular parameter, sweeping parameter
   }
 }
 
@@ -924,9 +1047,9 @@ function reinflateECB ( ecb : ECB, position : Vec2D
     const ecbSquashDatum = inflateECB (fullsizeecb, angularParameter, relevantSurfaces);    
     const squashedecb = squashECBAt(fullsizeecb, ecbSquashDatum);
     const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
-                                 , position.y );
+                                 , position.y + (angularParameter === 0 ? 0 : squashedecb[0].y - ecb[0].y));
+    const newAngular = ecbSquashDatum.location;
     return [newPosition, ecbSquashDatum, squashedecb];
-
   }
   else {
     return [position, { location : angularParameter, factor : 1}, ecb];
@@ -969,15 +1092,25 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
     default:
       relevantSurfaces = stageWalls.concat(stageGrounds).concat(stageCeilings).concat(stagePlatforms);
       break;
-    case "all":
-      relevantSurfaces = stageWalls;
+    case "notGrounds":
+      relevantSurfaces = stageWalls.concat(stageGrounds);
       break;
   }
 
   const resolution = resolveECB( ecb1, ecbp, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
-  let newSquashDatum = resolution.squash;
+  const newSquashFactor = (newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x);
+  let newSquashLocation = null;
+  if (newTouching !== null) {
+    if (newTouching.kind === "surface") {
+      newSquashLocation = newTouching.pt;
+    }
+    else {
+      newSquashLocation = newTouching.angular;
+    }
+  }
+  let newSquashDatum = { location : newSquashLocation, factor : newSquashFactor };
   newSquashDatum.factor *= ecbSquashDatum.factor;
   let newPosition = subtract(add(position, newECBp[0]), ecbp[0]);
 
@@ -995,12 +1128,25 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
     if (newSquashDatum.location === null) {
       newSquashDatum.location = ecbSquashDatum.location;
     }
+    const firstSquashLocation = newSquashDatum.location;
     [ newPosition
     , newSquashDatum
     , newECBp ] = reinflateECB( newECBp, newPosition
                               , allSurfacesMinusPlatforms
                               , newSquashDatum
                               );
+    if (   firstSquashLocation !== 0
+        && newSquashDatum.location !== null
+        && newSquashDatum.factor < 1 ) {
+      // reinflate a second time if it might help
+      [ newPosition
+      , newSquashDatum
+      , newECBp ] = reinflateECB( newECBp, newPosition
+                                , allSurfacesMinusPlatforms
+                                , newSquashDatum
+                                );
+    }
+
   } 
 
   return [ newPosition, collisionLabel, newSquashDatum, newECBp ];

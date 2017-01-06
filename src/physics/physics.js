@@ -618,8 +618,6 @@ function findAndResolveCollisions ( i : number, input : any
 
     [stillGrounded, backward] = dealWithGround(i, relevantGround, relevantGroundTypeAndIndex, connected, input);
 
-    player[i].phys.ECBp = moveECB(player[i].phys.ECBp, subtract(player[i].phys.pos, oldPosition));
-
   }
 
   // end of grounded state movement
@@ -633,7 +631,7 @@ function findAndResolveCollisions ( i : number, input : any
   let horizIgnore = "none"; // ignore no horizontal surfaces by default
 
   if (player[i].phys.grounded) {
-    horizIgnore = "all"; // ignore all vertical surfaces when grounded
+    horizIgnore = "notGrounds"; // ignore ceilings and platforms when grounded (but not grounds)
   }
   else {
     horizIgnore = notIgnoringPlatforms? "none" : "platforms";
@@ -956,8 +954,8 @@ export function physics (i : number, input : any) : void {
   ];
 
   
-  if (ecbSquashData[i] !== null) {
-    player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, ecbSquashData[i]);
+  if (ecbSquashData[i] !== null && ecbSquashData[i].factor < 1) {
+    player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, { factor : ecbSquashData[i].factor, location : 0});
   }
 
 
