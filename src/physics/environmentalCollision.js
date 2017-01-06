@@ -877,10 +877,9 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
 
   const flipPt = pt === 1 ? 3 : 1;
   const [closestTgtECB, furthestTgtECB, same] = (Math.abs(fstTgtECB[pt].y - srcECB[pt].y) < Math.abs(sndTgtECB[flipPt].y - srcECB[flipPt].y))
-                                              ? [fstTgtECB, sndTgtECB, pt] 
-                                              : [sndTgtECB, fstTgtECB, flipPt];
+                                              ? ([fstTgtECB, sndTgtECB, pt])
+                                              : ([sndTgtECB, fstTgtECB, flipPt]);
   const diff = same === 1 ? 3 : 1;
-  const height = closestTgtECB[same].y;
   const t = (closestTgtECB[same].y - srcECB[same].y) / (furthestTgtECB[diff].y - srcECB[diff].y);
   const otherTgtECB = interpolateECB(srcECB, furthestTgtECB, t);
 
@@ -936,8 +935,8 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
       }
       else {
         tgtECB[same] = otherTgtECB[same];
-        tgtECB[2].y = tgtECB[2].x, tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-        tgtECB[0].y = tgtECB[0].x, tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+        tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
+        tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
         tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
         tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
         output = [tgtECB, abort];
