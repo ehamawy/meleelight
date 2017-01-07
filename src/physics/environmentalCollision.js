@@ -521,7 +521,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
     drawECB(srcECB, "#286ee0");
     drawECB(tgtECB, "#f49930");
     drawECB(ecbp, "#fff9ad");
-    output = { ecb : ecbp, touching : null };
+    output = { ecb : srcECB, touching : null };
   }
   else {
     const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst );
@@ -557,11 +557,11 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
         if (surfaceType === "l" || surfaceType === "r" || surfaceType === "c") {
           newSlidingType = surfaceType;
         }
-        same = slideObject.pt;
-        angular = same;
+        same = surfaceType === "l" ? 1 : 3;
+        angular = slideObject.pt;
         newECBp = updateECBp( srcECB, slideDatum.midECB, ecbp, newSlidingType, same );
-        newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : same };
-        [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, same );
+        newTouchingDatum = { kind : "surface", type : surfaceType, index : slideObject.index, pt : angular };
+        [newTgtECB, newFinal] = findNextTargetFromSurface ( newSrcECB, newECBp, surface, surfaceType, angular );
       }
       else {
         const corner = slideObject.corner;
@@ -900,7 +900,8 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
     else {
       abort = false;
       const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
-      tgtECB[same] = add(otherTgtECB[same], new Vec2D(- sign * additionalOffset,0));
+      tgtECB[same] = new Vec2D(   otherTgtECB[same].x - sign * additionalOffset,   otherTgtECB[same].y );
+      tgtECB[diff] = new Vec2D( closestTgtECB[diff].x + sign * additionalOffset, closestTgtECB[diff].y );
       tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
       tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
       tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
@@ -918,8 +919,8 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
     const intercept = coordinateIntercept(sameLine, offsetDiffLine);
     if (Math.abs(closestTgtECB[same].y - srcECB[same].y) >= Math.abs(intercept.y - srcECB[same].y)) {
       abort = true;
-      tgtECB[same] = intercept;
-      tgtECB[diff] = new Vec2D( intercept.x - sign*smallestECBWidth, intercept.y);
+      tgtECB[same] = new Vec2D( intercept.x + sign*additionalOffset, intercept.y);
+      tgtECB[diff] = new Vec2D( intercept.x - sign*smallestECBWidth - sign*additionalOffset, intercept.y);
       const squashFactor = (tgtECB[same].x - tgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
       tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
       tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
@@ -934,7 +935,8 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
         output = [tgtECB, abort];
       }
       else {
-        tgtECB[same] = otherTgtECB[same];
+        tgtECB[same] = new Vec2D(   otherTgtECB[same].x - sign * additionalOffset,   otherTgtECB[same].y );
+        tgtECB[diff] = new Vec2D( closestTgtECB[diff].x + sign * additionalOffset, closestTgtECB[diff].y );
         tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
         tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
         tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
@@ -943,6 +945,7 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
       }
     }
   }
+  drawECB(tgtECB, "#f9482c");
   return output;
 }
 
