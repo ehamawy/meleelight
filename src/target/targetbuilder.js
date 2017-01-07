@@ -393,66 +393,67 @@ export function targetBuilderControls (p, input){
                   drawingPolygon.pop();
                   // if has enough sides, start building walls
                   if (drawingPolygon.length >= 3){
-                    var topPoint = 0;
-                    // find top point, also make polygon objects while we are looping
+                    // find index direction of clockwise, also make polygon objects while we are looping
                     stageTemp.draw.polygon.push([]);
                     stageTemp.polygon.push([]);
                     stageTemp.polygonMap.push([]);
+                    let area = 0;
                     for (let i=0;i<drawingPolygon.length;i++){
-                      // use less than because measuring in canvas pixels
-                      if (drawingPolygon[i].y < drawingPolygon[topPoint].y) {
-                        topPoint = i;
-                      }
+                      let nextPoint = (i === drawingPolygon.length - 1) ? 0 : i + 1;
+                      area += (drawingPolygon[nextPoint].x - drawingPolygon[i].x)*(drawingPolygon[nextPoint].y + drawingPolygon[i].y);
+
                       stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
                       stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D((drawingPolygon[i].x-600)/3,(drawingPolygon[i].y-375)/-3);
                     }
-                    let direction = 1;
-                    // find index direction of clockwise
-                    // if point before top point is further right than the point after, change direction
-                    if (drawingPolygon[(topPoint === 0) ? drawingPolygon.length-1 : (topPoint-1)].x > drawingPolygon[(topPoint === drawingPolygon.length-1) ? 0 : (topPoint+1)].x) {
-                      direction = -1;
-                    }
-                    // loop through polygon and determine type
-                    let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
+                    let direction = Math.sign(area)*-1;
 
-                    for (let i=0;i<drawingPolygon.length;i++){
-                      let nextIndex = curIndex + direction;
-                      if (nextIndex === -1) {
-                        nextIndex = drawingPolygon.length - 1;
-                      } else if (nextIndex === drawingPolygon.length){
-                        nextIndex = 0;
-                      }
+                    // if not a flat line then start making
+                    if (direction != 0 && direction != -0) {
+                      // loop through polygon and determine type
+                      let curIndex = (direction === 1) ? 0 : drawingPolygon.length - 1;
 
-                      let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
-                      let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
-                      let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
-                      if (Math.sign(angle) === -1) {
-                        angle += twoPi;
+                      for (let i=0;i<drawingPolygon.length;i++){
+                        let nextIndex = curIndex + direction;
+                        if (nextIndex === -1) {
+                          nextIndex = drawingPolygon.length - 1;
+                        } else if (nextIndex === drawingPolygon.length){
+                          nextIndex = 0;
+                        }
+
+                        let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
+                        let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
+                        let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
+                        if (Math.sign(angle) === -1) {
+                          angle += twoPi;
+                        }
+                        
+                        if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
+                          // is ground
+                          stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                          stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                          stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ground",stageTemp.ground.length-1]);
+                        } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
+                          // is ceiling
+                          stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                          stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                          stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ceiling",stageTemp.ceiling.length-1]);
+                        } else if (angle > Math.PI) {
+                          // is wallR
+                          stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                          stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                          stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallR",stageTemp.wallR.length-1]);
+                        } else {
+                          // is wallL
+                          stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
+                          stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
+                          stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallL",stageTemp.wallL.length-1]);
+                        }
+    
+                        curIndex = nextIndex;
                       }
-                      
-                      if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
-                        // is ground
-                        stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ground",stageTemp.ground.length-1]);
-                      } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
-                        // is ceiling
-                        stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ceiling",stageTemp.ceiling.length-1]);
-                      } else if (angle > Math.PI) {
-                        // is wallR
-                        stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallR",stageTemp.wallR.length-1]);
-                      } else {
-                        // is wallL
-                        stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
-                        stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
-                        stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallL",stageTemp.wallL.length-1]);
-                      }
-  
-                      curIndex = nextIndex;
+                    } else {
+                      tooSmallTimer = 60;
+                      tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
                     }
                     drawingPolygon = [];
                   } else {
