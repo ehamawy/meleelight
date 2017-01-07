@@ -55,19 +55,7 @@ export var stageTemp = {
   blastzone : new Box2D([-250,-250],[250,250]),
   scale : 3,
   offset : [600,375],
-  connected : [],
-  draw : {
-    polygon : [],
-    box : [],
-    platform : [],
-    ground : [],
-    ceiling : [],
-    wallL : [],
-    wallR : [],
-    target : [],
-    startingPoint : new Vec2D(600,375),
-    ledge : []
-  }
+  connected : []
 };
 let grabbedItem = 0;
 let hoverItem = 0;
@@ -117,16 +105,11 @@ export function undo (){
   if (num >= 0){
     let item = undoList[num];
     stageTemp[item].pop();
-    stageTemp.draw[item].pop();
     if (item == "box") {
       stageTemp.ground.pop();
       stageTemp.ceiling.pop();
       stageTemp.wallL.pop();
       stageTemp.wallR.pop();
-      stageTemp.draw.ground.pop();
-      stageTemp.draw.ceiling.pop();
-      stageTemp.draw.wallL.pop();
-      stageTemp.draw.wallR.pop();
     }
     undoList.pop();
   }
@@ -271,6 +254,9 @@ export function targetBuilderControls (p, input){
         console.log(code);
       }*/
       //hoverButton = -1;
+      if (input[p][0].b && !input[p][1].b) {
+        stageTemp.scale += 0.1;
+      }
       let multi = (input[p][0].y || input[p][0].x)?1:5;
       unGriddedCrossHairPos.x += input[p][0].lsX*multi;
       unGriddedCrossHairPos.y += input[p][0].lsY*multi;
@@ -279,19 +265,19 @@ export function targetBuilderControls (p, input){
         crossHairPos.y = unGriddedCrossHairPos.y;
       } else {
         if (unGriddedCrossHairPos.x == 0) {
-          crossHairPos.x = (600 % gridSizes[gridType]) / 3;
+          crossHairPos.x = (600 % gridSizes[gridType]) / stageTemp.scale;
         } else {
-          crossHairPos.x = (Math.round(unGriddedCrossHairPos.x / (gridSizes[gridType] / 3)) * gridSizes[gridType] / 3) +
-            (600 % gridSizes[gridType]) / 3;
+          crossHairPos.x = (Math.round(unGriddedCrossHairPos.x / (gridSizes[gridType] / stageTemp.scale)) * gridSizes[gridType] / stageTemp.scale) +
+            (600 % gridSizes[gridType]) / stageTemp.scale;
         }
         if (unGriddedCrossHairPos.y == 0) {
-          crossHairPos.y = (375 % gridSizes[gridType]) / 3;
+          crossHairPos.y = (375 % gridSizes[gridType]) / stageTemp.scale;
         } else {
-          crossHairPos.y = (Math.round(unGriddedCrossHairPos.y / (gridSizes[gridType] / -3)) * gridSizes[gridType] /
-            -3) + (375 % gridSizes[gridType]) / 3;
+          crossHairPos.y = (Math.round(unGriddedCrossHairPos.y / (gridSizes[gridType] / -stageTemp.scale)) * gridSizes[gridType] /
+            -stageTemp.scale) + (375 % gridSizes[gridType]) / stageTemp.scale;
         }
       }
-      let realCrossHair = new Vec2D(crossHairPos.x*3+600,crossHairPos.y*-3+375)
+      let realCrossHair = new Vec2D(crossHairPos.x*stageTemp.scale+600,crossHairPos.y*-stageTemp.scale+375)
       /*if (realCrossHair.x >= 700 && realCrossHair.x <= 1110 && realCrossHair.y >= 650 && realCrossHair.y <= 710){
         hoverButton = Math.floor((realCrossHair.x-695)/70);
       }*/
@@ -394,7 +380,6 @@ export function targetBuilderControls (p, input){
                   // if has enough sides, start building walls
                   if (drawingPolygon.length >= 3){
                     // find index direction of clockwise, also make polygon objects while we are looping
-                    stageTemp.draw.polygon.push([]);
                     stageTemp.polygon.push([]);
                     stageTemp.polygonMap.push([]);
                     let area = 0;
@@ -402,8 +387,7 @@ export function targetBuilderControls (p, input){
                       let nextPoint = (i === drawingPolygon.length - 1) ? 0 : i + 1;
                       area += (drawingPolygon[nextPoint].x - drawingPolygon[i].x)*(drawingPolygon[nextPoint].y + drawingPolygon[i].y);
 
-                      stageTemp.draw.polygon[stageTemp.draw.polygon.length-1][i] = new Vec2D(drawingPolygon[i].x,drawingPolygon[i].y);
-                      stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D((drawingPolygon[i].x-600)/3,(drawingPolygon[i].y-375)/-3);
+                      stageTemp.polygon[stageTemp.polygon.length-1][i] = new Vec2D((drawingPolygon[i].x-600)/stageTemp.scale,(drawingPolygon[i].y-375)/-stageTemp.scale);
                     }
                     let direction = Math.sign(area)*-1;
 
@@ -421,7 +405,7 @@ export function targetBuilderControls (p, input){
                         }
 
                         let drawLine = [new Vec2D(drawingPolygon[curIndex].x, drawingPolygon[curIndex].y), new Vec2D(drawingPolygon[nextIndex].x, drawingPolygon[nextIndex].y)];
-                        let realLine = [new Vec2D((drawLine[0].x-600)/3, (drawLine[0].y-375)/-3),new Vec2D((drawLine[1].x-600)/3, (drawLine[1].y-375)/-3)];
+                        let realLine = [new Vec2D((drawLine[0].x-600)/stageTemp.scale, (drawLine[0].y-375)/-stageTemp.scale),new Vec2D((drawLine[1].x-600)/stageTemp.scale, (drawLine[1].y-375)/-stageTemp.scale)];
                         let angle = Math.atan2(realLine[1].y - realLine[0].y , realLine[1].x - realLine[0].x);
                         if (Math.sign(angle) === -1) {
                           angle += twoPi;
@@ -429,22 +413,18 @@ export function targetBuilderControls (p, input){
                         
                         if (angle <= Math.PI/6 || angle >= Math.PI*11/6) {
                           // is ground
-                          stageTemp.draw.ground.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                           stageTemp.ground.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
                           stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ground",stageTemp.ground.length-1]);
                         } else if (angle >= Math.PI*5/6 && angle <= Math.PI*7/6) {
                           // is ceiling
-                          stageTemp.draw.ceiling.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                           stageTemp.ceiling.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
                           stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["ceiling",stageTemp.ceiling.length-1]);
                         } else if (angle > Math.PI) {
                           // is wallR
-                          stageTemp.draw.wallR.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                           stageTemp.wallR.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
                           stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallR",stageTemp.wallR.length-1]);
                         } else {
                           // is wallL
-                          stageTemp.draw.wallL.push([new Vec2D(drawLine[0].x, drawLine[0].y), new Vec2D(drawLine[1].x, drawLine[1].y)]);
                           stageTemp.wallL.push([new Vec2D(realLine[0].x, realLine[0].y), new Vec2D(realLine[1].x, realLine[1].y)]);
                           stageTemp.polygonMap[stageTemp.polygonMap.length-1].push(["wallL",stageTemp.wallL.length-1]);
                         }
@@ -499,13 +479,12 @@ export function targetBuilderControls (p, input){
                 // calculate left and right points
                 let left = (drawingPlatform[0].x - drawingPlatform[1].x < 0) ? 0 : 1;
                 let right = 1 - left;
-                let convertedLeft = new Vec2D((drawingPlatform[left].x - 600) / 3 , (drawingPlatform[left].y - 375) / -3);
-                let convertedRight = new Vec2D((drawingPlatform[right].x - 600) / 3 , (drawingPlatform[right].y - 375) / -3);
+                let convertedLeft = new Vec2D((drawingPlatform[left].x - 600) / stageTemp.scale , (drawingPlatform[left].y - 375) / -stageTemp.scale);
+                let convertedRight = new Vec2D((drawingPlatform[right].x - 600) / stageTemp.scale , (drawingPlatform[right].y - 375) / -stageTemp.scale);
                 // calculate angle
                 let angle = Math.atan2(convertedRight.y - convertedLeft.y, convertedRight.x - convertedLeft.x);
                 // if angle is within limit, build it
                 if (Math.abs(angle) <= Math.PI/6) {
-                  stageTemp.draw.platform.push([new Vec2D(drawingPlatform[left].x, drawingPlatform[left].y), new Vec2D(drawingPlatform[right].x, drawingPlatform[right].y)]);
                   stageTemp.platform.push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
                 } else {
                   badAngleTimer = 60;
@@ -542,11 +521,10 @@ export function targetBuilderControls (p, input){
               if (Math.pow(drawingWall[0].x - drawingWall[1].x,2) + Math.pow(drawingWall[0].y - drawingWall[1].y,2) >= 100) {
                 let left = (drawingWall[0].x - drawingWall[1].x < 0) ? 0 : 1;
                 let right = 1 - left;
-                let convertedLeft = new Vec2D((drawingWall[left].x - 600) / 3 , (drawingWall[left].y - 375) / -3);
-                let convertedRight = new Vec2D((drawingWall[right].x - 600) / 3 , (drawingWall[right].y - 375) / -3);
+                let convertedLeft = new Vec2D((drawingWall[left].x - 600) / stageTemp.scale , (drawingWall[left].y - 375) / -stageTemp.scale);
+                let convertedRight = new Vec2D((drawingWall[right].x - 600) / stageTemp.scale , (drawingWall[right].y - 375) / -stageTemp.scale);
                 let angle = Math.atan2(convertedRight.y - convertedLeft.y, convertedRight.x - convertedLeft.x);
                 if (((wallType === "ground" || wallType === "ceiling") && Math.abs(angle) <= Math.PI/6) || ((wallType === "wallL" || wallType === "wallR") && Math.abs(angle) != 0 && Math.abs(angle) != Math.PI)) {
-                  stageTemp.draw[wallType].push([new Vec2D(drawingWall[left].x, drawingWall[left].y), new Vec2D(drawingWall[right].x, drawingWall[right].y)]);
                   stageTemp[wallType].push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
                   // if wanting to connect, check each case
                 } else {
@@ -571,8 +549,8 @@ export function targetBuilderControls (p, input){
           ledgeHoverItem = 0;
           let found = findLine(realCrossHair, ["platform", "ground"], true);
           if (found) {
-            let toLeft = Math.pow(realCrossHair.x - stageTemp.draw[hoverItem[0]][hoverItem[1]][0].x,2) + Math.pow(realCrossHair.y - stageTemp.draw[hoverItem[0]][hoverItem[1]][0].y,2);
-            let toRight = Math.pow(realCrossHair.x - stageTemp.draw[hoverItem[0]][hoverItem[1]][1].x,2) + Math.pow(realCrossHair.y - stageTemp.draw[hoverItem[0]][hoverItem[1]][1].y,2);
+            let toLeft = Math.pow(crossHairPos.x - stageTemp[hoverItem[0]][hoverItem[1]][0].x,2) + Math.pow(crossHairPos.y - stageTemp[hoverItem[0]][hoverItem[1]][0].y,2);
+            let toRight = Math.pow(crossHairPos.x - stageTemp[hoverItem[0]][hoverItem[1]][1].x,2) + Math.pow(crossHairPos.y - stageTemp[hoverItem[0]][hoverItem[1]][1].y,2);
             if (toRight < toLeft) {
               ledgeHoverItem = [hoverItem[0], hoverItem[1], 1];
             } else {
@@ -599,7 +577,6 @@ export function targetBuilderControls (p, input){
           //TARGET
           if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
             if (stageTemp.target.length < 20) {
-              stageTemp.draw.target.push(new Vec2D(realCrossHair.x, realCrossHair.y));
               stageTemp.target.push(new Vec2D(crossHairPos.x, crossHairPos.y));
               undoList.push("target");
               sounds.blunthit.play();
@@ -611,8 +588,8 @@ export function targetBuilderControls (p, input){
         case 5:
           //MOVE
           if (grabbedItem == 0) {
-            if (Math.abs(realCrossHair.x - stageTemp.draw.startingPoint.x) <= 30 && Math.abs(realCrossHair.y -
-                stageTemp.draw.startingPoint.y) <= 30) {
+            if (Math.abs(crossHairPos.x - stageTemp.startingPoint.x) <= 5 && Math.abs(crossHairPos.y -
+                stageTemp.startingPoint.y) <= 5) {
               hoverItem = ["startingPoint", 0];
             } else {
               if (!findTarget(realCrossHair)) {
@@ -651,8 +628,8 @@ export function targetBuilderControls (p, input){
           break;
         case 6:
           //DELETE
-          if (Math.abs(realCrossHair.x - stageTemp.draw.startingPoint.x) <= 30 && Math.abs(realCrossHair.y -
-              stageTemp.draw.startingPoint.y) <= 30) {
+          if (Math.abs(crossHairPos.x - stageTemp.startingPoint.x) <= 5 && Math.abs(crossHairPos.y -
+              stageTemp.startingPoint.y) <= 5) {
             hoverItem = ["startingPoint", 0];
           } else {
             if (!findTarget(realCrossHair)) {
@@ -671,7 +648,6 @@ export function targetBuilderControls (p, input){
                   break;
                 case "platform":
                 case "target":
-                  stageTemp.draw[hoverItem[0]].splice(hoverItem[1], 1);
                   stageTemp[hoverItem[0]].splice(hoverItem[1], 1);
                   sounds.menuBack.play();
                   break;
@@ -679,7 +655,6 @@ export function targetBuilderControls (p, input){
                 case "ceiling":
                 case "wallL":
                 case "wallR":
-                  stageTemp.draw[hoverItem[0]].splice(hoverItem[1], 1);
                   stageTemp[hoverItem[0]].splice(hoverItem[1], 1);
                   for (let p=0;p<stageTemp.polygonMap.length;p++){
                     for (let k=0;k<stageTemp.polygonMap[p].length;k++){
@@ -709,7 +684,6 @@ export function targetBuilderControls (p, input){
                   for (let j=0;j<stageTemp.polygonMap[hoverItem[1]].length;j++){
                     let type = stageTemp.polygonMap[hoverItem[1]][j][0];
                     let index = stageTemp.polygonMap[hoverItem[1]][j][1];
-                    stageTemp.draw[type].splice(index, 1);
                     stageTemp[type].splice(index, 1);
                     for (let p=0;p<stageTemp.polygonMap.length;p++){
                       for (let k=0;k<stageTemp.polygonMap[p].length;k++){
@@ -720,7 +694,6 @@ export function targetBuilderControls (p, input){
                     }
                   }
                   stageTemp.polygon.splice(hoverItem[1], 1);
-                  stageTemp.draw.polygon.splice(hoverItem[1], 1);
                   stageTemp.polygonMap.splice(hoverItem[1], 1);
                   sounds.menuBack.play();
                   break;
@@ -813,21 +786,46 @@ export function targetBuilderControls (p, input){
 
 }
 
-export function drawTargetStage (){
-  for (let i=0;i<stageTemp.draw.polygon.length;i++){
-  ui.fillStyle = (hoverItem[0] === "polygon" && hoverItem[1] === i) ? "rgba(255,255,255,0.5)" : boxFill;
-    let p = stageTemp.draw.polygon[i];
+export function toPixel(p, axis = "both"){
+  if (axis === 0) {
+    return p * stageTemp.scale + stageTemp.offset[0];
+  } else if (axis === 1) {
+    return p * -stageTemp.scale + stageTemp.offset[1];
+  } else {
+    return new Vec2D(p.x * stageTemp.scale + stageTemp.offset[0], p.y * -stageTemp.scale + stageTemp.offset[1]);
+  }
+}
+
+export function drawLinesOfType(type, colour) {
+  ui.strokeStyle = colour;
+  for (let i=0;i<stageTemp[type].length;i++){
+    let lL = toPixel(stageTemp[type][i][0]);
+    let lR = toPixel(stageTemp[type][i][1]);
     ui.beginPath();
-    ui.moveTo(p[0].x,p[0].y);
+    ui.moveTo(lL.x, lL.y);
+    ui.lineTo(lR.x, lR.y);
+    ui.closePath();
+    ui.stroke();
+  }
+}
+
+export function drawTargetStage (){
+  for (let i=0;i<stageTemp.polygon.length;i++){
+  ui.fillStyle = (hoverItem[0] === "polygon" && hoverItem[1] === i) ? "rgba(255,255,255,0.5)" : boxFill;
+    let p = stageTemp.polygon[i];
+    let pn = toPixel(p[0]);
+    ui.beginPath();
+    ui.moveTo(pn.x,pn.y);
     for (let n=1;n<p.length;n++) {
-      ui.lineTo(p[n].x,p[n].y);
+      pn = toPixel(p[n]);
+      ui.lineTo(pn.x,pn.y);
     }
     ui.closePath();
     ui.fill();
   }
-  for (let i=0;i<stageTemp.draw.target.length;i++){
-    let x = stageTemp.draw.target[i].x;
-    let y = stageTemp.draw.target[i].y;
+  for (let i=0;i<stageTemp.target.length;i++){
+    let x = toPixel(stageTemp.target[i].x, 0);
+    let y = toPixel(stageTemp.target[i].y, 1);
     for (let j=0;j<5;j++){
       if (hoverItem[0] == "target" && hoverItem[1] == i){
         ui.fillStyle = (j%2)?"white":"rgb(241, 111, 111)";
@@ -841,59 +839,20 @@ export function drawTargetStage (){
       ui.fill();
     }
   }
-
-  ui.strokeStyle = "#db80cc";
   ui.lineWidth = 1;
-  for (let i=0;i<stageTemp.draw.ground.length;i++){
-    let g = stageTemp.draw.ground[i];
-    ui.beginPath();
-    ui.moveTo(g[0].x, g[0].y);
-    ui.lineTo(g[1].x, g[1].y);
-    ui.closePath();
-    ui.stroke();
-  }
-  ui.strokeStyle = "#4794c6";
-  for (let i=0;i<stageTemp.draw.platform.length;i++){
-    let p = stageTemp.draw.platform[i];
-    ui.beginPath();
-    ui.moveTo(p[0].x, p[0].y);
-    ui.lineTo(p[1].x, p[1].y);
-    ui.closePath();
-    ui.stroke();
-  }
-  ui.strokeStyle = "#47c648";
-  for (let i=0;i<stageTemp.draw.wallL.length;i++){
-    let w = stageTemp.draw.wallL[i];
-    ui.beginPath();
-    ui.moveTo(w[0].x, w[0].y);
-    ui.lineTo(w[1].x, w[1].y);
-    ui.closePath();
-    ui.stroke();
-  }
-  ui.strokeStyle = "#9867de";
-  for (let i=0;i<stageTemp.draw.wallR.length;i++){
-    let w = stageTemp.draw.wallR[i];
-    ui.beginPath();
-    ui.moveTo(w[0].x, w[0].y);
-    ui.lineTo(w[1].x, w[1].y);
-    ui.closePath();
-    ui.stroke();
-  }
-  ui.strokeStyle = "#f04c4c";
-  for (let i=0;i<stageTemp.draw.ceiling.length;i++){
-    let ce = stageTemp.draw.ceiling[i];
-    ui.beginPath();
-    ui.moveTo(ce[0].x, ce[0].y);
-    ui.lineTo(ce[1].x, ce[1].y);
-    ui.closePath();
-    ui.stroke();
-  }
+
+  drawLinesOfType("ground", "#db80cc")
+  drawLinesOfType("platform", "#4794c6");
+  drawLinesOfType("wallL", "#47c648");
+  drawLinesOfType("wallR", "#9867de");
+  drawLinesOfType("ceiling", "#f04c4c"); 
+
   ui.strokeStyle = "#e7a44c";
   ui.lineWidth = 2;
   for (let i=0;i<stageTemp.ledge.length;i++){
     let e = stageTemp.ledge[i];
-    let pA = stageTemp.draw[e[0]][e[1]][e[2]];
-    let pB = stageTemp.draw[e[0]][e[1]][1-e[2]];
+    let pA = toPixel(stageTemp[e[0]][e[1]][e[2]]);
+    let pB = toPixel(stageTemp[e[0]][e[1]][1-e[2]]);
     let ang = Math.atan2((pB.y - pA.y) , (pB.x - pA.x));
     let magnitude = Math.sqrt(Math.pow(pB.y - pA.y, 2) + Math.pow(pB.x - pA.x, 2));
     let length = Math.min(0.25 * magnitude, 20);
@@ -933,8 +892,9 @@ export function renderTargetBuilder (){
         let w = stageTemp.connected[i][j][k];
         if (w != null) {
           let type = (w[0] === "p") ? "platform" : "ground";
-          ui.moveTo(stageTemp.draw[type][w[1]][1-k].x,stageTemp.draw[type][w[1]][1-k].y);
-          ui.arc(stageTemp.draw[type][w[1]][1-k].x,stageTemp.draw[type][w[1]][1-k].y, 5, 0, twoPi);
+          let p = toPixel(stageTemp[type][w[1]][1-k]);
+          ui.moveTo(p.x,p.y);
+          ui.arc(p.x,p.y, 5, 0, twoPi);
         }
       }
     }
@@ -1003,79 +963,24 @@ export function renderTargetBuilder (){
     spCol = ["rgb(82, 82, 82)","rgb(171, 255, 145)"];
   }
   ui.fillStyle = spCol[0];
-  ui.fillRect(stageTemp.draw.startingPoint.x - 4, stageTemp.draw.startingPoint.y - 12, 8, 24);
-  ui.fillRect(stageTemp.draw.startingPoint.x - 12, stageTemp.draw.startingPoint.y - 4, 24, 8);
-  ui.fillRect(stageTemp.draw.startingPoint.x - 27, stageTemp.draw.startingPoint.y - 23, 54, 13);
+  let sP = toPixel(stageTemp.startingPoint);
+  ui.fillRect(sP.x - 4, sP.y - 12, 8, 24);
+  ui.fillRect(sP.x - 12, sP.y - 4, 24, 8);
+  ui.fillRect(sP.x - 27, sP.y - 23, 54, 13);
   ui.fillStyle = spCol[1];
-  ui.fillRect(stageTemp.draw.startingPoint.x - 2, stageTemp.draw.startingPoint.y - 10, 4, 20);
-  ui.fillRect(stageTemp.draw.startingPoint.x - 10, stageTemp.draw.startingPoint.y - 2, 20, 4);
+  ui.fillRect(sP.x - 2, sP.y - 10, 4, 20);
+  ui.fillRect(sP.x - 10, sP.y - 2, 20, 4);
   ui.font = "900 14px Arial";
-  ui.fillText("START", stageTemp.draw.startingPoint.x, stageTemp.draw.startingPoint.y - 12);
-  //ui.strokeText("START",stageTemp.draw.startingPoint.x,stageTemp.draw.startingPoint.y-12);
+  ui.fillText("START", sP.x, sP.y - 12);
   let i = hoverItem[1];
-  if (hoverItem[0] == "box"){
-    ui.strokeStyle = "#e9bee2";
-    ui.lineWidth = 3;
-    let g = stageTemp.draw.ground[i];
-    ui.beginPath();
-    ui.moveTo(g[0].x, g[0].y);
-    ui.lineTo(g[1].x, g[1].y);
-    ui.closePath();
-    ui.stroke();
-
-    ui.strokeStyle = "#86df87";
-    let w = stageTemp.draw.wallL[i];
-    ui.beginPath();
-    ui.moveTo(w[0].x, w[0].y);
-    ui.lineTo(w[1].x, w[1].y);
-    ui.closePath();
-    ui.stroke();
-
-    ui.strokeStyle = "#b99fde";
-     w = stageTemp.draw.wallR[i];
-    ui.beginPath();
-    ui.moveTo(w[0].x, w[0].y);
-    ui.lineTo(w[1].x, w[1].y);
-    ui.closePath();
-    ui.stroke();
-
-    ui.strokeStyle = "#fa9292";
-    let ce = stageTemp.draw.ceiling[i];
-    ui.beginPath();
-    ui.moveTo(ce[0].x, ce[0].y);
-    ui.lineTo(ce[1].x, ce[1].y);
-    ui.closePath();
-    ui.stroke();
-
-    ui.strokeStyle = "#e8bd84";
-    for (let j=0;j<stageTemp.ledge.length;j++){
-      let e = stageTemp.ledge[j];
-      if (e[0] == i){
-        ui.beginPath();
-        if (e[1]) {
-          ui.moveTo(stageTemp.draw.box[e[0]].max.x, stageTemp.draw.box[e[0]].max.y + Math.min(30, (stageTemp.draw.box[
-            e[0]].min.y - stageTemp.draw.box[e[0]].max.y) / 2));
-          ui.lineTo(stageTemp.draw.box[e[0]].max.x, stageTemp.draw.box[e[0]].max.y);
-          ui.lineTo(stageTemp.draw.box[e[0]].max.x - Math.min(30, (stageTemp.draw.box[e[0]].max.x - stageTemp.draw.box[
-            e[0]].min.x) / 2), stageTemp.draw.box[e[0]].max.y);
-        } else {
-          ui.moveTo(stageTemp.draw.box[e[0]].min.x, stageTemp.draw.box[e[0]].max.y + Math.min(30, (stageTemp.draw.box[
-            e[0]].min.y - stageTemp.draw.box[e[0]].max.y) / 2));
-          ui.lineTo(stageTemp.draw.box[e[0]].min.x, stageTemp.draw.box[e[0]].max.y);
-          ui.lineTo(stageTemp.draw.box[e[0]].min.x + Math.min(30, (stageTemp.draw.box[e[0]].max.x - stageTemp.draw.box[
-            e[0]].min.x) / 2), stageTemp.draw.box[e[0]].max.y);
-        }
-        ui.closePath();
-        ui.stroke();
-      }
-    }
-  } else if (hoverItem[0] === "platform" || hoverItem[0] === "ground" || hoverItem[0] === "ceiling" || hoverItem[0] === "wallL" || hoverItem[0] === "wallR") {
+  if (hoverItem[0] === "platform" || hoverItem[0] === "ground" || hoverItem[0] === "ceiling" || hoverItem[0] === "wallL" || hoverItem[0] === "wallR") {
     ui.lineWidth = 3;
     ui.strokeStyle = "rgba(255,255,255,0.7)";
-    let p = stageTemp.draw[hoverItem[0]][i];
+    let p0 = toPixel(stageTemp[hoverItem[0]][i][0]);
+    let p1 = toPixel(stageTemp[hoverItem[0]][i][0]);
     ui.beginPath();
-    ui.moveTo(p[0].x, p[0].y);
-    ui.lineTo(p[1].x, p[1].y);
+    ui.moveTo(p0.x, p0.y);
+    ui.lineTo(p1.x, p1.y);
     ui.closePath();
     ui.stroke();
   }
@@ -1083,7 +988,8 @@ export function renderTargetBuilder (){
   if (ledgeHoverItem != 0) {
     ui.fillStyle = "rgb(255, 148, 70)";
     ui.beginPath();
-    ui.arc(stageTemp.draw[ledgeHoverItem[0]][ledgeHoverItem[1]][ledgeHoverItem[2]].x, stageTemp.draw[ledgeHoverItem[0]][ledgeHoverItem[1]][ledgeHoverItem[2]].y, 10, 0, twoPi);
+    let p = toPixel(stageTemp[ledgeHoverItem[0]][ledgeHoverItem[1]][ledgeHoverItem[2]]);
+    ui.arc(p.x, p.y, 10, 0, twoPi);
     ui.closePath();
     ui.fill();
   }
@@ -1267,20 +1173,20 @@ export function renderTargetBuilder (){
   }
   if (targetTool == 5) {
     if (grabbedItem == 0) {
-      ui.drawImage(handOpen, crossHairPos.x * 3 + 600 - 18, crossHairPos.y * -3 + 375 - 24, 36, 48);
+      ui.drawImage(handOpen, crossHairPos.x * stageTemp.scale + 600 - 18, crossHairPos.y * -stageTemp.scale + 375 - 24, 36, 48);
     } else {
-      ui.drawImage(handGrab, crossHairPos.x * 3 + 600 - 18, crossHairPos.y * -3 + 375 - 24, 36, 48);
+      ui.drawImage(handGrab, crossHairPos.x * stageTemp.scale + 600 - 18, crossHairPos.y * -stageTemp.scale + 375 - 24, 36, 48);
     }
   } else if (targetTool == 6) {
     ui.font = "900 40px Arial";
     ui.fillStyle = "rgb(255, 83, 83)";
     ui.strokeStyle = "black";
-    ui.fillText("X", crossHairPos.x * 3 + 600, crossHairPos.y * -3 + 375 + 10);
-    ui.strokeText("X", crossHairPos.x * 3 + 600, crossHairPos.y * -3 + 375 + 10);
+    ui.fillText("X", crossHairPos.x * stageTemp.scale + 600, crossHairPos.y * -stageTemp.scale + 375 + 10);
+    ui.strokeText("X", crossHairPos.x * stageTemp.scale + 600, crossHairPos.y * -stageTemp.scale + 375 + 10);
   } else {
     ui.fillStyle = "#ffffff";
-    ui.fillRect(crossHairPos.x * 3 + 600 - 2, crossHairPos.y * -3 + 375 - 10, 4, 20);
-    ui.fillRect(crossHairPos.x * 3 + 600 - 10, crossHairPos.y * -3 + 375 - 2, 20, 4);
+    ui.fillRect(crossHairPos.x * stageTemp.scale + 600 - 2, crossHairPos.y * -stageTemp.scale + 375 - 10, 4, 20);
+    ui.fillRect(crossHairPos.x * stageTemp.scale + 600 - 10, crossHairPos.y * -stageTemp.scale + 375 - 2, 20, 4);
   }
 
   if (builderPaused) {
@@ -1305,7 +1211,7 @@ export function renderTargetBuilder (){
 export function findTarget (realCrossHair){
   let found = false;
   for (let i=0;i<stageTemp.target.length;i++){
-    if (Math.abs(realCrossHair.x - stageTemp.draw.target[i].x) <= 30 && Math.abs(realCrossHair.y - stageTemp.draw.target[i].y) <= 30){
+    if (Math.abs(crossHairPos.x - stageTemp.target[i].x) <= 5 && Math.abs(realCrossHair.y - stageTemp.target[i].y) <= 5){
       hoverItem = ["target",i];
       found = true;
       break;
@@ -1318,7 +1224,7 @@ export function findLine (realCrossHair, types = ["platform","ground","ceiling",
   let found = false;
   for (let i=0;i<types.length;i++) {
     for (let j=0;j<stageTemp[types[i]].length;j++) {
-      if (distanceToLine(realCrossHair, stageTemp.draw[types[i]][j]) <= 20){
+      if (distanceToLine(crossHairPos, stageTemp[types[i]][j]) <= 5){
         if (i === 0) {
           hoverItem = ["platform",j];
           found = true;
@@ -1368,11 +1274,9 @@ export function centerItem (item,realCrossHair){
   let offsetR = new Vec2D(realCrossHair.x - prevRealCrossHair.x, realCrossHair.y - prevRealCrossHair.y);
   switch (item[0]){
     case "startingPoint":
-      stageTemp.draw.startingPoint = new Vec2D(realCrossHair.x, realCrossHair.y);
       stageTemp.startingPoint = new Vec2D(crossHairPos.x, crossHairPos.y);
       break;
     case "target":
-      stageTemp.draw.target[item[1]] = new Vec2D(realCrossHair.x, realCrossHair.y);
       stageTemp.target[item[1]] = new Vec2D(crossHairPos.x, crossHairPos.y);
       break;
     case "platform":
@@ -1380,10 +1284,6 @@ export function centerItem (item,realCrossHair){
     case "ceiling":
     case "wallL":
     case "wallR":
-      stageTemp.draw[item[0]][item[1]][0].x += offsetR.x;
-      stageTemp.draw[item[0]][item[1]][1].x += offsetR.x;
-      stageTemp.draw[item[0]][item[1]][0].y += offsetR.y;
-      stageTemp.draw[item[0]][item[1]][1].y += offsetR.y;
       stageTemp[item[0]][item[1]][0].x += offset.x;
       stageTemp[item[0]][item[1]][1].x += offset.x;
       stageTemp[item[0]][item[1]][0].y += offset.y;
@@ -1391,14 +1291,8 @@ export function centerItem (item,realCrossHair){
       break;
     case "polygon":
       for (let i=0;i<stageTemp.polygon[item[1]].length;i++){
-        stageTemp.draw.polygon[item[1]][i].x += offsetR.x;
-        stageTemp.draw.polygon[item[1]][i].y += offsetR.y;
         stageTemp.polygon[item[1]][i].x += offset.x;
         stageTemp.polygon[item[1]][i].y += offset.y;
-        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].x += offsetR.x;
-        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].x += offsetR.x;
-        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].y += offsetR.y;
-        stageTemp.draw[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].y += offsetR.y;
         stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].x += offset.x;
         stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][1].x += offset.x;
         stageTemp[stageTemp.polygonMap[item[1]][i][0]][stageTemp.polygonMap[item[1]][i][1]][0].y += offset.y;
