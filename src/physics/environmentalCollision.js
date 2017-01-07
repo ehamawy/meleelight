@@ -880,10 +880,24 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
                                               ? ([fstTgtECB, sndTgtECB, pt])
                                               : ([sndTgtECB, fstTgtECB, flipPt]);
   const diff = same === 1 ? 3 : 1;
-  const t = (closestTgtECB[same].y - srcECB[same].y) / (furthestTgtECB[diff].y - srcECB[diff].y);
-  const otherTgtECB = interpolateECB(srcECB, furthestTgtECB, t);
+  let otherTgtECB;
+  if (furthestTgtECB[diff].y === srcECB[diff].y) {
+    otherTgtECB = furthestTgtECB;
+  }
+  else {
+    const t = (closestTgtECB[same].y - srcECB[same].y) / (furthestTgtECB[diff].y - srcECB[diff].y);
+    if (t <= 0) {
+      otherTgtECB = srcECB;
+    }
+    else if (t >= 1) {
+      otherTgtECB = furthestTgtECB;
+    }
+    else {
+      otherTgtECB = interpolateECB(srcECB, furthestTgtECB, t);
+    }
+  }
 
-  const tgtECB = closestTgtECB;
+  const tgtECB = closestTgtECB; // yet to be squashed
   let abort;
 
   const sign = Math.sign(closestTgtECB[same].x - closestTgtECB[diff].x);
@@ -930,8 +944,8 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
     }
     else {
       abort = false;
-      const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
-      if (squashFactor > 1) {
+      const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x - 2 * sign * additionalOffset) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      if (squashFactor >= 1) {
         output = [tgtECB, abort];
       }
       else {
