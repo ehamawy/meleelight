@@ -11,6 +11,7 @@ import {euclideanDist} from "../main/linAlg";
 const bgPos = [[-30, 500, 300, 500, 900, 500, 1230, 450, 358], [-30, 400, 300, 400, 900, 400, 1230, 350, 179]];
 const direction = [[1, -1, 1, -1, 1, -1, 1, -1, 1], [-1, 1, -1, 1, -1, 1, -1, 1, -1]];
 export let boxFill = "rgba(0, 0, 0, 0.1)";
+export let boxFillBG = "rgba(0, 0, 0, 0.1)";
 
 
 const bgStars = [];
@@ -234,6 +235,30 @@ export function drawStage() {
         fg2.closePath();
         fg2.fill();
       }
+      bg2.save();
+      bg2.fillStyle = boxFillBG;
+      for (let i=0;i<activeStage.background.polygon.length;i++) {   
+        let p = activeStage.background.polygon[i];
+        bg2.beginPath();
+        bg2.moveTo(p[0].x * activeStage.scale + activeStage.offset[0],p[0].y * -activeStage.scale + activeStage.offset[1]);
+        for (let n=1;n<p.length;n++) {
+          bg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0],p[n].y * -activeStage.scale + activeStage.offset[1]);
+        }
+        bg2.closePath();
+        bg2.fill();
+      }   
+      bg2.lineWidth = 3;
+      bg2.strokeStyle = boxFillBG;
+      for (let i=0;i<activeStage.background.line.length;i++){
+        let lL = activeStage.background.line[i][0];
+        let lR = activeStage.background.line[i][1];
+        bg2.beginPath();
+        bg2.moveTo(lL.x * activeStage.scale + activeStage.offset[0], lL.y * -activeStage.scale + activeStage.offset[1]);
+        bg2.lineTo(lR.x * activeStage.scale + activeStage.offset[0], lR.y * -activeStage.scale + activeStage.offset[1]);
+        bg2.closePath();
+        bg2.stroke();
+      }
+      bg2.restore();
     }
 
     fg2.strokeStyle = "#e7a44c";
@@ -316,6 +341,7 @@ export function drawBackgroundInit() {
         gridGrad.addColorStop(1, "rgba(94, 173, 255, 0.2)");
         bg2.strokeStyle = gridGrad;
         boxFill = "rgba(94, 173, 255, 0.3)";
+        boxFillBG = "rgba(94, 173, 255, 0.25)";
     }
 };
 
@@ -451,9 +477,11 @@ export function drawStars() {
         }
         if (getTransparency()) {
             boxFill = "hsla(" + bgPos[k][8] + ", 100%, 50%, " + (0.15 - k * 0.07) + ")";
+            boxFillBG = "hsla(" + bgPos[k][8] + ", 100%, 50%, " + (0.13 - k * 0.07) + ")";
         }
         else {
             boxFill = "hsl(" + bgPos[k][8] + ", 100%, 7%)";
+            boxFillBG = "hsl(" + bgPos[k][8] + ", 50%, 7%)";
         }
         bg2.fillStyle = boxFill;
         bg2.beginPath();
