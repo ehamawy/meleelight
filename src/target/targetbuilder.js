@@ -1,8 +1,8 @@
 
-import {player,ui, changeGamemode, setCookie, layers, clearScreen} from "main/main";
+import {player,ui, changeGamemode, setCookie, layers, clearScreen, characterSelections} from "main/main";
 import {sounds} from "main/sfx";
 import {handGrab, handOpen} from "menus/css";
-import {twoPi} from "main/render";
+import {twoPi, drawArrayPathCompress} from "main/render";
 import {startTargetGame} from "target/targetplay";
 import {boxFill, drawBackground} from "stages/stagerender";
 import {deepCopyObject} from "main/util/deepCopyObject";
@@ -27,13 +27,14 @@ export let wallTypeIndex = 0;
 export let wallTypeList = ["ground","ceiling","wallL","wallR"];
 export let showingCode = false;
 export let toolInfoTimer = 0;
-export let toolInfo = ["Polygon","Platform","Wall","Ledge","Target","Move","Delete"];
+export let toolInfo = ["Polygon","Platform","Wall","Ledge","Target","Move","Delete","Scale"];
 export let holdingA = false;
 export let amDrawingPolygon = false;
 export let drawingWall = [new Vec2D(0,0),new Vec2D(0,0)];
 export let drawingPolygon = [];
 export let drawingPlatform = [new Vec2D(0,0),new Vec2D(0,0)];
 export let editingStage = -1;
+export let scaleScroll = 0;
 
 export let badAngleTimer = 0;
 export let badAnglePos = new Vec2D(0,0);
@@ -242,6 +243,26 @@ export function createStageObject (s){
 let currentPolygonLines = [];
 let denied = false;
 
+export function calculateGriddedCrossHair(){
+  if (gridType == 4){
+    crossHairPos.x = unGriddedCrossHairPos.x;
+    crossHairPos.y = unGriddedCrossHairPos.y;
+  } else {
+    if (unGriddedCrossHairPos.x == 0) {
+      crossHairPos.x = (600 % gridSizes[gridType]) / stageTemp.scale;
+    } else {
+      crossHairPos.x = (Math.round(unGriddedCrossHairPos.x / (gridSizes[gridType] / stageTemp.scale)) * gridSizes[gridType] / stageTemp.scale) +
+            (600 % gridSizes[gridType]) / stageTemp.scale;
+    }
+    if (unGriddedCrossHairPos.y == 0) {
+      crossHairPos.y = (375 % gridSizes[gridType]) / stageTemp.scale;
+    } else {
+      crossHairPos.y = (Math.round(unGriddedCrossHairPos.y / (gridSizes[gridType] / -stageTemp.scale)) * gridSizes[gridType] /
+            -stageTemp.scale) + (375 % gridSizes[gridType]) / stageTemp.scale;
+    }
+  }
+}
+
 export function targetBuilderControls (p, input){
   drawConnectIndicator = false;
   if (!showingCode){
@@ -254,50 +275,38 @@ export function targetBuilderControls (p, input){
         console.log(code);
       }*/
       //hoverButton = -1;
-      if (input[p][0].b && !input[p][1].b) {
-        stageTemp.scale += 0.1;
-      }
       let multi = (input[p][0].y || input[p][0].x)?1:5;
-      unGriddedCrossHairPos.x += input[p][0].lsX*multi;
-      unGriddedCrossHairPos.y += input[p][0].lsY*multi;
-      if (gridType == 4){
-        crossHairPos.x = unGriddedCrossHairPos.x;
-        crossHairPos.y = unGriddedCrossHairPos.y;
-      } else {
-        if (unGriddedCrossHairPos.x == 0) {
-          crossHairPos.x = (600 % gridSizes[gridType]) / stageTemp.scale;
-        } else {
-          crossHairPos.x = (Math.round(unGriddedCrossHairPos.x / (gridSizes[gridType] / stageTemp.scale)) * gridSizes[gridType] / stageTemp.scale) +
-            (600 % gridSizes[gridType]) / stageTemp.scale;
-        }
-        if (unGriddedCrossHairPos.y == 0) {
-          crossHairPos.y = (375 % gridSizes[gridType]) / stageTemp.scale;
-        } else {
-          crossHairPos.y = (Math.round(unGriddedCrossHairPos.y / (gridSizes[gridType] / -stageTemp.scale)) * gridSizes[gridType] /
-            -stageTemp.scale) + (375 % gridSizes[gridType]) / stageTemp.scale;
-        }
+      if (targetTool === 7) {
+        multi = 0;
       }
-      let realCrossHair = new Vec2D(crossHairPos.x*stageTemp.scale+600,crossHairPos.y*-stageTemp.scale+375)
+      unGriddedCrossHairPos.x += input[p][0].lsX*multi*3/stageTemp.scale;
+      unGriddedCrossHairPos.y += input[p][0].lsY*multi*3/stageTemp.scale;
+      calculateGriddedCrossHair();
+      let realCrossHair = new Vec2D(crossHairPos.x*stageTemp.scale+600,crossHairPos.y*-stageTemp.scale+375);
       /*if (realCrossHair.x >= 700 && realCrossHair.x <= 1110 && realCrossHair.y >= 650 && realCrossHair.y <= 710){
         hoverButton = Math.floor((realCrossHair.x-695)/70);
       }*/
-      if (crossHairPos.x > 200){
-        crossHairPos.x = 200;
-        realCrossHair.x = 1200;
-      }
-      if (crossHairPos.x < -200) {
-        crossHairPos.x = -200;
+      if (realCrossHair.x < 0){
+        unGriddedCrossHairPos.x = -600 / stageTemp.scale;
+        calculateGriddedCrossHair();
         realCrossHair.x = 0;
       }
-      if (crossHairPos.y > 125) {
-        crossHairPos.y = 125;
-        realCrossHair.y = 0;
+      if (realCrossHair.x > 1200) {
+        unGriddedCrossHairPos.x = 600 / stageTemp.scale;
+        calculateGriddedCrossHair();
+        realCrossHair.x = 1200;
       }
-      if (crossHairPos.y < -125) {
-        crossHairPos.y = -125;
+      if (realCrossHair.y > 750) {
+        unGriddedCrossHairPos.y = 375 / -stageTemp.scale;
+        calculateGriddedCrossHair();
         realCrossHair.y = 750;
       }
-      if (realCrossHair.x > 670 && realCrossHair.y > 630) {
+      if (realCrossHair.y < 0) {
+        unGriddedCrossHairPos.y = -375 / -stageTemp.scale;
+        calculateGriddedCrossHair();
+        realCrossHair.y = 0;
+      }
+      if (realCrossHair.x > 600 && realCrossHair.y < 100) {
         hoverToolbar = 0.3;
       } else {
         hoverToolbar = 1;
@@ -311,14 +320,14 @@ export function targetBuilderControls (p, input){
       if ((input[p][0].l && !input[p][1].l) || (input[p][0].dl && !input[p][1].dl)) {
         sounds.menuSelect.play();
         targetTool--;
-        if (targetTool == -1) {
-          targetTool = 6;
+        if (targetTool === -1) {
+          targetTool = 7;
         }
         toolInfoTimer = 120;
       } else if ((input[p][0].r && !input[p][1].r) || (input[p][0].dr && !input[p][1].dr)) {
         sounds.menuSelect.play();
         targetTool++;
-        if (targetTool == 7) {
+        if (targetTool === 8) {
           targetTool = 0;
         }
         toolInfoTimer = 120;
@@ -704,6 +713,32 @@ export function targetBuilderControls (p, input){
             }
           }
           break;
+        case 7:
+          // SCALE
+          if (input[p][0].lsY > 0) {
+            scaleScroll++;
+            if (scaleScroll > 5) {
+              scaleScroll = 0;
+              stageTemp.scale += 0.1;
+              sounds.menuSelect.play();
+              if (stageTemp.scale > 6) {
+                stageTemp.scale = 6;
+              }
+            }
+          } else if (input[p][0].lsY < 0) {
+            scaleScroll++;
+            if (scaleScroll > 5) {
+              scaleScroll = 0;
+              stageTemp.scale -= 0.1
+              sounds.menuSelect.play();
+              if (stageTemp.scale < 2) {
+                stageTemp.scale = 2;
+              }
+            }
+          } else {
+            scaleScroll = 0;
+          }
+          break;
         default:
           break;
       }
@@ -977,7 +1012,7 @@ export function renderTargetBuilder (){
     ui.lineWidth = 3;
     ui.strokeStyle = "rgba(255,255,255,0.7)";
     let p0 = toPixel(stageTemp[hoverItem[0]][i][0]);
-    let p1 = toPixel(stageTemp[hoverItem[0]][i][0]);
+    let p1 = toPixel(stageTemp[hoverItem[0]][i][1]);
     ui.beginPath();
     ui.moveTo(p0.x, p0.y);
     ui.lineTo(p1.x, p1.y);
@@ -1010,15 +1045,15 @@ export function renderTargetBuilder (){
   ui.fillStyle = "rgb(255,255,255)";
   ui.font = "13px Lucida Console, monaco, monospace";
 
-  for (let i=0;i<7;i++){
+  for (let i=0;i<8;i++){
     if (targetTool == i){
       if (toolInfoTimer > 0){
         ui.save();
         ui.globalAlpha = 1 * hoverToolbar;
         ui.fillStyle = "rgba(0,0,0," + Math.min(toolInfoTimer / 60, 1) + ")";
-        ui.fillRect(620 + i * 70, 715, 80, 30);
+        ui.fillRect(620 + i * 70, 85, 80, 30);
         ui.fillStyle = "rgba(255,255,255," + Math.min(toolInfoTimer / 60, 1) + ")";
-        ui.fillText(toolInfo[targetTool], 660 + i * 70, 733);
+        ui.fillText(toolInfo[targetTool], 660 + i * 70, 103);
         ui.restore();
       }
       ui.globalAlpha = 0.6 * hoverToolbar;
@@ -1033,33 +1068,33 @@ export function renderTargetBuilder (){
             index -= 4;
           }
           ui.beginPath();
-          ui.moveTo(630 + i * 70, 660 - (n+1) * 70);
-          ui.arc(640 + i * 70, 660 - (n+1) * 70, 10, Math.PI, Math.PI * 1.5);
-          ui.lineTo(680 + i * 70, 650 - (n+1) * 70);
-          ui.arc(680 + i * 70, 660 - (n+1) * 70, 10, Math.PI * 1.5, twoPi);
-          ui.lineTo(690 + i * 70, 710 - (n+1) * 70);
-          ui.arc(680 + i * 70, 700 - (n+1) * 70, 10, 0, Math.PI / 2);
-          ui.lineTo(640 + i * 70, 710 - (n+1) * 70);
-          ui.arc(640 + i * 70, 700 - (n+1) * 70, 10, Math.PI / 2, Math.PI);
+          ui.moveTo(630 + i * 70, 30 + (n+1) * 70);
+          ui.arc(640 + i * 70, 30 + (n+1) * 70, 10, Math.PI, Math.PI * 1.5);
+          ui.lineTo(680 + i * 70, 20 + (n+1) * 70);
+          ui.arc(680 + i * 70, 30 + (n+1) * 70, 10, Math.PI * 1.5, twoPi);
+          ui.lineTo(690 + i * 70, 80 + (n+1) * 70);
+          ui.arc(680 + i * 70, 70 + (n+1) * 70, 10, 0, Math.PI / 2);
+          ui.lineTo(640 + i * 70, 80 + (n+1) * 70);
+          ui.arc(640 + i * 70, 70 + (n+1) * 70, 10, Math.PI / 2, Math.PI);
           ui.closePath();
           ui.fill();
           ui.beginPath();
           switch (wallTypeList[index]) {
             case "ground":
-              ui.moveTo(788, 687 - (n+1) * 70);
-              ui.lineTo(812, 679 - (n+1) * 70);
+              ui.moveTo(788, 57 + (n+1) * 70);
+              ui.lineTo(812, 29 + (n+1) * 70);
               break;
             case "ceiling":
-              ui.moveTo(788, 679 - (n+1) * 70);
-              ui.lineTo(812, 687 - (n+1) * 70);
+              ui.moveTo(788, 49 + (n+1) * 70);
+              ui.lineTo(812, 57 + (n+1) * 70);
               break;
             case "wallL":
-              ui.moveTo(804, 671 - (n+1) * 70);
-              ui.lineTo(796, 695 - (n+1) * 70);
+              ui.moveTo(804, 41 + (n+1) * 70);
+              ui.lineTo(796, 65 + (n+1) * 70);
               break;
             case "wallR":
-              ui.moveTo(796, 671 - (n+1) * 70);
-              ui.lineTo(804, 695 - (n+1) * 70);
+              ui.moveTo(796, 41 + (n+1) * 70);
+              ui.lineTo(804, 65 + (n+1) * 70);
               break;
             default:
               break;
@@ -1071,20 +1106,50 @@ export function renderTargetBuilder (){
     } else {
       ui.globalAlpha = 0.2 * hoverToolbar;
     }
-    ui.beginPath();
-    ui.moveTo(630 + i * 70, 660);
-    ui.arc(640 + i * 70, 660, 10, Math.PI, Math.PI * 1.5);
-    ui.lineTo(680 + i * 70, 650);
-    ui.arc(680 + i * 70, 660, 10, Math.PI * 1.5, twoPi);
-    ui.lineTo(690 + i * 70, 710);
-    ui.arc(680 + i * 70, 700, 10, 0, Math.PI / 2);
-    ui.lineTo(640 + i * 70, 710);
-    ui.arc(640 + i * 70, 700, 10, Math.PI / 2, Math.PI);
-    ui.closePath();
-    ui.fill();
+    if (i === 7) {
+      ui.beginPath();
+      ui.moveTo(640 + i*70, 40);
+      ui.lineTo(660 + i*70, 25);
+      ui.lineTo(680 + i*70, 40);
+      ui.lineTo(675 + i*70, 40);
+      ui.lineTo(660 + i*70, 30);
+      ui.lineTo(645 + i*70, 40);
+      ui.closePath();
+      ui.fill();
+      ui.beginPath();
+      ui.moveTo(640 + i*70, 60);
+      ui.lineTo(660 + i*70, 75);
+      ui.lineTo(680 + i*70, 60);
+      ui.lineTo(675 + i*70, 60);
+      ui.lineTo(660 + i*70, 70);
+      ui.lineTo(645 + i*70, 60);
+      ui.closePath();
+      ui.fill();
+      ui.save();
+      ui.font = "16px Lucida Console, monaco, monospace";
+      ui.fillText(stageTemp.scale.toFixed(2),660+i*70,56);
+      ui.restore();
+    } else {
+      ui.beginPath();
+      ui.moveTo(630 + i * 70, 30);
+      ui.arc(640 + i * 70, 30, 10, Math.PI, Math.PI * 1.5);
+      ui.lineTo(680 + i * 70, 20);
+      ui.arc(680 + i * 70, 30, 10, Math.PI * 1.5, twoPi);
+      ui.lineTo(690 + i * 70, 80);
+      ui.arc(680 + i * 70, 70, 10, 0, Math.PI / 2);
+      ui.lineTo(640 + i * 70, 80);
+      ui.arc(640 + i * 70, 70, 10, Math.PI / 2, Math.PI);
+      ui.closePath();
+      ui.fill();
+    }
   }
   ui.lineWidth = 4;
   ui.globalAlpha = 1;
+  if (targetTool === 7) {
+    let temX = (0 * stageTemp.scale) + stageTemp.offset[0];
+    let temY = (0 * -stageTemp.scale) + stageTemp.offset[1];
+    drawArrayPathCompress(ui, "rgb(250, 89, 89)", 1, temX, temY, animations[characterSelections[targetBuilder]].WAIT[0], player[targetBuilder].charAttributes.charScale * (stageTemp.scale / 4.5), player[targetBuilder].charAttributes.charScale * (stageTemp.scale / 4.5), 0, 0, 0);
+  }
   ui.save();
   ui.globalAlpha = 1 * hoverToolbar;
   ui.fillStyle = "rgba(0,0,0,0.8)";
@@ -1092,33 +1157,33 @@ export function renderTargetBuilder (){
   ui.font = "600 14px Lucida Console, monaco, monospace";
   //ui.fillText(120 - stageTemp.box.length, 745, 707); 
   ui.beginPath();
-  ui.moveTo(660,670);
-  ui.lineTo(672,690);
-  ui.lineTo(648,690);
+  ui.moveTo(660,40);
+  ui.lineTo(672,60);
+  ui.lineTo(648,60);
   ui.closePath();
   ui.stroke();
   //ui.fillText(120 - stageTemp.platform.length, 815, 707);
   ui.beginPath();
-  ui.moveTo(718, 680);
-  ui.lineTo(742, 680);
+  ui.moveTo(718, 50);
+  ui.lineTo(742, 50);
   ui.stroke();
   ui.beginPath();
   switch (wallType) {
     case "ground":
-      ui.moveTo(788, 687);
-      ui.lineTo(812, 679);
+      ui.moveTo(788, 57);
+      ui.lineTo(812, 49);
       break;
     case "ceiling":
-      ui.moveTo(788, 679);
-      ui.lineTo(812, 687);
+      ui.moveTo(788, 49);
+      ui.lineTo(812, 57);
       break;
     case "wallL":
-      ui.moveTo(804, 671);
-      ui.lineTo(796, 695);
+      ui.moveTo(804, 41);
+      ui.lineTo(796, 65);
       break;
     case "wallR":
-      ui.moveTo(796, 671);
-      ui.lineTo(804, 695);
+      ui.moveTo(796, 41);
+      ui.lineTo(804, 65);
       break;
     default:
       break;
@@ -1127,34 +1192,34 @@ export function renderTargetBuilder (){
   ui.closePath();
   ui.save();
   ui.scale(0.8,1);
-  ui.fillText(wallType, 800/0.8, 665);
+  ui.fillText(wallType, 800/0.8, 35);
   ui.restore();
   ui.beginPath();
-  ui.moveTo(860, 690);
-  ui.lineTo(860, 670);
-  ui.lineTo(880, 670);
+  ui.moveTo(860, 60);
+  ui.lineTo(860, 40);
+  ui.lineTo(880, 40);
   ui.stroke();
   ui.closePath();
-  ui.fillText(20 - stageTemp.target.length, 955, 707);
+  ui.fillText(20 - stageTemp.target.length, 955, 77);
   ui.fillStyle = "rgba(255,0,0,0.8)";
   ui.beginPath();
-  ui.arc(940, 680, 15, 0, twoPi);
+  ui.arc(940, 50, 15, 0, twoPi);
   ui.closePath();
   ui.fill();
   ui.fillStyle = "rgba(255,255,255,0.8)";
   ui.beginPath();
-  ui.arc(940, 680, 10, 0, twoPi);
+  ui.arc(940, 50, 10, 0, twoPi);
   ui.closePath();
   ui.fill();
   ui.fillStyle = "rgba(255,0,0,0.8)";
   ui.beginPath();
-  ui.arc(940, 680, 5, 0, twoPi);
+  ui.arc(940, 50, 5, 0, twoPi);
   ui.closePath();
   ui.fill();
-  ui.drawImage(handOpen, 997, 663, 29, 38);
+  ui.drawImage(handOpen, 997, 33, 29, 38);
   ui.font = "900 30px Arial";
   ui.fillStyle = "rgba(252, 45, 45, 0.8)";
-  ui.fillText("X", 1080, 692);
+  ui.fillText("X", 1080, 62);
   ui.restore();
   ui.font = "13px Lucida Console, monaco, monospace";
   if (tooSmallTimer > 0) {
