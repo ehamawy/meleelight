@@ -241,30 +241,36 @@ export function drawStage() {
           fg2.fill();
         }
       }
-      bg2.save();
-      bg2.fillStyle = boxFillBG;
-      for (let i=0;i<activeStage.background.polygon.length;i++) {   
-        let p = activeStage.background.polygon[i];
-        bg2.beginPath();
-        bg2.moveTo(p[0].x * activeStage.scale + activeStage.offset[0],p[0].y * -activeStage.scale + activeStage.offset[1]);
-        for (let n=1;n<p.length;n++) {
-          bg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0],p[n].y * -activeStage.scale + activeStage.offset[1]);
+      if (activeStage.background !== null && activeStage.background !== undefined) {
+        if (activeStage.background.polygon !== null && activeStage.background.polygon !== undefined) {
+          bg2.save();
+          bg2.fillStyle = boxFillBG;
+          for (let i=0;i<activeStage.background.polygon.length;i++) {   
+            let p = activeStage.background.polygon[i];
+            bg2.beginPath();
+            bg2.moveTo(p[0].x * activeStage.scale + activeStage.offset[0],p[0].y * -activeStage.scale + activeStage.offset[1]);
+            for (let n=1;n<p.length;n++) {
+              bg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0],p[n].y * -activeStage.scale + activeStage.offset[1]);
+            }
+            bg2.closePath();
+            bg2.fill();
+          }
         }
-        bg2.closePath();
-        bg2.fill();
-      }   
-      bg2.lineWidth = 3;
-      bg2.strokeStyle = boxFillBG;
-      for (let i=0;i<activeStage.background.line.length;i++){
-        let lL = activeStage.background.line[i][0];
-        let lR = activeStage.background.line[i][1];
-        bg2.beginPath();
-        bg2.moveTo(lL.x * activeStage.scale + activeStage.offset[0], lL.y * -activeStage.scale + activeStage.offset[1]);
-        bg2.lineTo(lR.x * activeStage.scale + activeStage.offset[0], lR.y * -activeStage.scale + activeStage.offset[1]);
-        bg2.closePath();
-        bg2.stroke();
+        if (activeStage.background.line !== null && activeStage.background.line !== undefined) {
+          bg2.lineWidth = 3;
+          bg2.strokeStyle = boxFillBG;
+          for (let i=0;i<activeStage.background.line.length;i++){
+            let lL = activeStage.background.line[i][0];
+            let lR = activeStage.background.line[i][1];
+            bg2.beginPath();
+            bg2.moveTo(lL.x * activeStage.scale + activeStage.offset[0], lL.y * -activeStage.scale + activeStage.offset[1]);
+            bg2.lineTo(lR.x * activeStage.scale + activeStage.offset[0], lR.y * -activeStage.scale + activeStage.offset[1]);
+            bg2.closePath();
+            bg2.stroke();
+          }
+          bg2.restore();
+        }
       }
-      bg2.restore();
     }
 
     fg2.strokeStyle = "#e7a44c";
