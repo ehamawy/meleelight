@@ -700,9 +700,13 @@ export function targetBuilderControls (p, input){
                 case "platform":
                   if (hoverItem[0] === "platform") {
                     for (let n=0;n<stageTemp.ledge.length;n++) {
-                      if (stageTemp.ledge[n][0] === "platform" && stageTemp.ledge[n][1] === hoverItem[1]) {
-                        stageTemp.ledge.splice(n, 1);
-                        n--;
+                      if (stageTemp.ledge[n][0] === "platform"){
+                        if (stageTemp.ledge[n][1] > hoverItem[1]) {
+                          stageTemp.ledge[n][1]--;
+                        } else if (stageTemp.ledge[n][1] === hoverItem[1]) {
+                          stageTemp.ledge.splice(n, 1);
+                          n--;
+                        }
                       }
                     }
                     stageTemp.connected[1].splice(hoverItem[1], 1);
@@ -732,9 +736,13 @@ export function targetBuilderControls (p, input){
                   }
                   if (hoverItem[0] === "ground") {
                     for (let n=0;n<stageTemp.ledge.length;n++) {
-                      if (stageTemp.ledge[n][0] === "ground" && stageTemp.ledge[n][1] === hoverItem[1]) {
-                        stageTemp.ledge.splice(n, 1);
-                        n--;
+                      if (stageTemp.ledge[n][0] === "ground"){
+                        if (stageTemp.ledge[n][1] > hoverItem[1]) {
+                            stageTemp.ledge[n][1]--;
+                        } else if (stageTemp.ledge[n][1] === hoverItem[1]) {
+                          stageTemp.ledge.splice(n, 1);
+                          n--;
+                        }
                       }
                     }
                     stageTemp.connected[0].splice(hoverItem[1], 1);
@@ -752,9 +760,13 @@ export function targetBuilderControls (p, input){
                     stageTemp[type].splice(index, 1);
                     if (type === "ground") {
                       for (let n=0;n<stageTemp.ledge.length;n++) {
-                        if (stageTemp.ledge[n][0] === "ground" && stageTemp.ledge[n][1] === index) {
-                          stageTemp.ledge.splice(n, 1);
-                          n--;
+                        if (stageTemp.ledge[n][0] === "ground"){
+                          if (stageTemp.ledge[n][1] > index) {
+                            stageTemp.ledge[n][1]--;
+                          } else if (stageTemp.ledge[n][1] === index) {
+                            stageTemp.ledge.splice(n, 1);
+                            n--;
+                          }
                         }
                       }
                       stageTemp.connected[0].splice(index, 1);
@@ -776,6 +788,7 @@ export function targetBuilderControls (p, input){
               }
               hoverItem = 0;
               stageTemp.connected = getConnected(stageTemp);
+              console.log(stageTemp.ledge);
             }
           }
           break;
