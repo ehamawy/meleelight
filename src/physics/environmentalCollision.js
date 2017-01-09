@@ -1,4 +1,4 @@
-// @flow
+
 /*eslint indent:1*/ // get stuffed
 
 import {Vec2D, getXOrYCoord, putXOrYCoord, flipXOrY} from "../main/util/Vec2D";
@@ -879,7 +879,8 @@ function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : nul
   }
 };
 
-
+// this function gets called when two walls (or corners) are trying to push horizontally in opposite directions
+// this function computes a squashed ECB that will fit in between the two objects that are squeezing it
 function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp : ECB, pt : number, grounded : bool ) : [ECB, bool] {
   let output;
 
@@ -905,8 +906,9 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
     }
   }
 
-  const tgtECB = closestTgtECB; // yet to be squashed
+  const tgtECB = [new Vec2D (0,0), new Vec2D (0,0), new Vec2D (0,0), new Vec2D (0,0)]; // initialising
   let abort;
+  let squashFactor = 1;
 
   const sign = Math.sign(closestTgtECB[same].x - closestTgtECB[diff].x);
 
@@ -916,16 +918,16 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
      && Math.sign(otherTgtECB[same].x - closestTgtECB[diff].x) === sign) {
     if (Math.abs(otherTgtECB[same].x - closestTgtECB[diff].x) > Math.abs(closestTgtECB[same].x - closestTgtECB[diff].x)) {
       abort = false;
-      console.log("error in 'agreeOnTargetECB': function called when no squashing was required.");
-      output = [tgtECB, abort];
+      console.log("'agreeOnTargetECB' warning: function called when no squashing was required.");
+      output = [closestTgtECB, abort];
     }
     else {
       abort = false;
-      const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
       tgtECB[same] = new Vec2D(   otherTgtECB[same].x - sign * additionalOffset,   otherTgtECB[same].y );
       tgtECB[diff] = new Vec2D( closestTgtECB[diff].x + sign * additionalOffset, closestTgtECB[diff].y );
-      tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-      tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+      tgtECB[2].y = tgtECB[same].y + squashFactor * (closestTgtECB[2].y - closestTgtECB[same].y);
+      tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (closestTgtECB[0].y - closestTgtECB[same].y);
       tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
       tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
       output = [tgtECB, abort];
@@ -943,24 +945,24 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
       abort = true;
       tgtECB[same] = new Vec2D( intercept.x + sign*additionalOffset, intercept.y);
       tgtECB[diff] = new Vec2D( intercept.x - sign*smallestECBWidth - sign*additionalOffset, intercept.y);
-      const squashFactor = (tgtECB[same].x - tgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
-      tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-      tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+      squashFactor = (tgtECB[same].x - tgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      tgtECB[2].y = tgtECB[same].y + squashFactor * (closestTgtECB[2].y - closestTgtECB[same].y);
+      tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (closestTgtECB[0].y - closestTgtECB[same].y);
       tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
       tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
       output = [tgtECB, abort];
     }
     else {
       abort = false;
-      const squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x - 2 * sign * additionalOffset) / (closestTgtECB[same].x - closestTgtECB[diff].x);
+      squashFactor = (otherTgtECB[same].x - closestTgtECB[diff].x - 2 * sign * additionalOffset) / (closestTgtECB[same].x - closestTgtECB[diff].x);
       if (squashFactor >= 1) {
-        output = [tgtECB, abort];
+        output = [closestTgtECB, abort];
       }
       else {
         tgtECB[same] = new Vec2D(   otherTgtECB[same].x - sign * additionalOffset,   otherTgtECB[same].y );
         tgtECB[diff] = new Vec2D( closestTgtECB[diff].x + sign * additionalOffset, closestTgtECB[diff].y );
-        tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-        tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+        tgtECB[2].y = tgtECB[same].y + squashFactor * (closestTgtECB[2].y - closestTgtECB[same].y);
+        tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (closestTgtECB[0].y - closestTgtECB[same].y);
         tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
         tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
         output = [tgtECB, abort];
@@ -1125,7 +1127,7 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   const resolution = resolveECB( ecb1, ecbp, grounded, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
-  const newSquashFactor = Math.max(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x));
+  const newSquashFactor = Math.min(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x));
   let newSquashLocation = null;
   if (newTouching !== null) {
     if (newTouching.kind === "surface") {
