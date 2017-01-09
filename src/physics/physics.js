@@ -7,7 +7,7 @@ import {gameSettings} from "../settings";
 import {actionStates, turboAirborneInterrupt, turboGroundedInterrupt, turnOffHitboxes} from "./actionStateShortcuts";
 import {getLaunchAngle, getHorizontalVelocity, getVerticalVelocity, getHorizontalDecay, getVerticalDecay} from "./hitDetection";
 import {lostStockQueue} from "../main/render";
-import {runCollisionRoutine, coordinateIntercept, additionalOffset, groundedECBSquashFactor} from "./environmentalCollision";
+import {runCollisionRoutine, coordinateIntercept, additionalOffset, smallestECBWidth, groundedECBSquashFactor} from "./environmentalCollision";
 import {deepCopyObject} from "../main/util/deepCopyObject";
 import {drawVfx} from "../main/vfx/drawVfx";
 import {activeStage} from "../stages/activeStage";
@@ -930,24 +930,11 @@ export function physics (i : number, input : any) : void {
 
   /* global ecb */
   declare var ecb : any;
-  let ecbOffset = ecb[characterSelections[i]][player[i].actionState][frame - 1];
-  if (actionStates[characterSelections[i]][player[i].actionState].dead) {
-    ecbOffset = [0, 0, 0, 0];
-  }
-  /*switch (player[i].actionState){
-    case 26:
-    case 27:
-    case 28:
-    case 29:
-      ecbOffset = [0,0,0,0];
-      break;
-    default:
-      break;
-  }*/
-
+  const ecbOffset = ecb[characterSelections[i]][player[i].actionState][frame - 1];
   if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
     ecbOffset[0] = 0;
   }
+  ecbOffset[1] = Math.max(1, ecbOffset[1]);
 
   player[i].phys.ECBp = [
     new Vec2D(player[i].phys.pos.x               , player[i].phys.pos.y + ecbOffset[0] ),
@@ -958,6 +945,10 @@ export function physics (i : number, input : any) : void {
 
   
   if (ecbSquashData[i] !== null && ecbSquashData[i].factor < 1) {
+    if (ecbSquashData[i].factor * 2*ecbOffset[1] < smallestECBWidth) {
+      ecbSquashData[i].factor = (smallestECBWidth + 2*additionalOffset) / (2*ecbOffset[1]); 
+    }
+
     player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, { factor : ecbSquashData[i].factor, location : 0});
   }
 

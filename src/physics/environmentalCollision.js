@@ -1,4 +1,4 @@
-
+// @flow
 /*eslint indent:1*/ // get stuffed
 
 import {Vec2D, getXOrYCoord, putXOrYCoord, flipXOrY} from "../main/util/Vec2D";
@@ -19,7 +19,7 @@ import type {Stage, LabelledSurface} from "../stages/stage";
 import type {XOrY} from "../main/util/Vec2D";
 
 export const additionalOffset : number = 0.00001;
-const smallestECBWidth = 1.95;
+export const smallestECBWidth = 1.95;
 const maxRecursion = 6;
 
 // -----------------------------------------------------
@@ -1119,7 +1119,7 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
       relevantSurfaces = stageWalls.concat(stageGrounds).concat(stageCeilings).concat(stagePlatforms);
       break;
     case "all":
-      relevantSurfaces = stageWalls.concat(stageGrounds);
+      relevantSurfaces = stageWalls;//.concat(stageGrounds);
       break;
   }
 
