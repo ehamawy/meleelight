@@ -1152,7 +1152,10 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   }
 
   if (newSquashDatum.factor < 1 ) {
-    if (newSquashDatum.location === null) {
+    if (grounded) {
+      newSquashDatum.location = 0;
+    }
+    else if (newSquashDatum.location === null) {
       newSquashDatum.location = ecbSquashDatum.location;
     }
     const firstSquashLocation = newSquashDatum.location;
@@ -1162,7 +1165,7 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
                               , allSurfacesMinusPlatforms
                               , newSquashDatum
                               );
-    if (   firstSquashLocation !== 0
+    if (   !grounded
         && newSquashDatum.location !== null
         && newSquashDatum.factor < 1 ) {
       // reinflate a second time if it might help

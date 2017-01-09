@@ -588,12 +588,11 @@ const ecbSquashData : [ SquashDatum
 
 
 function findAndResolveCollisions ( i : number, input : any
-                                  , oldStillGrounded : bool
                                   , oldBackward : bool
                                   , oldNotTouchingWalls : [bool, bool]
                                   , ecbOffset : [number, number, number, number] ) : [bool, bool, [bool, bool]] {
 
-  let stillGrounded = oldStillGrounded;
+  let stillGrounded = true;
   let backward = oldBackward;
   const notTouchingWalls = oldNotTouchingWalls;
   const connected = activeStage.connected;
@@ -950,6 +949,9 @@ export function physics (i : number, input : any) : void {
     }
 
     player[i].phys.ECBp = squashECBAt(player[i].phys.ECBp, { factor : ecbSquashData[i].factor, location : 0});
+    if (!player[i].phys.grounded) { 
+      player[i].phys.ECBp = moveECB(player[i].phys.ECBp, new Vec2D(0, (ecbSquashData[i].factor-1)*ecbOffset[0]));
+    }
   }
 
 
@@ -959,7 +961,7 @@ export function physics (i : number, input : any) : void {
     let stillGrounded = true;
     let backward = false;
 
-    [stillGrounded, backward, notTouchingWalls] = findAndResolveCollisions(i, input, stillGrounded, backward, notTouchingWalls, ecbOffset);
+    [stillGrounded, backward, notTouchingWalls] = findAndResolveCollisions(i, input, backward, notTouchingWalls, ecbOffset);
 
 
     if (notTouchingWalls[0] && notTouchingWalls[1] && player[i].phys.canWallJump) {
