@@ -929,7 +929,7 @@ export function physics (i : number, input : any) : void {
 
   /* global ecb */
   declare var ecb : any;
-  const ecbOffset = ecb[characterSelections[i]][player[i].actionState][frame - 1];
+  const ecbOffset = actionStates[characterSelections[i]][player[i].actionState].dead ? [0, 0, 0, 0] : ecb[characterSelections[i]][player[i].actionState][frame - 1];
   if (player[i].phys.grounded || player[i].phys.airborneTimer < 10) {
     ecbOffset[0] = 0;
   }
