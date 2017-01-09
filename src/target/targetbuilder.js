@@ -505,7 +505,7 @@ export function targetBuilderControls (p, input){
               //RELEASE
               drawingPlatform[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
               // if width at least 10 start trying to build
-              if (Math.abs(drawingPlatform[0].x - drawingPlatform[1].x) >= 10) {
+              if (Math.abs(drawingPlatform[0].x - drawingPlatform[1].x) >= 10 || (drawMode && Math.pow(drawingPlatform[0].x - drawingPlatform[1].x, 2) + Math.pow(drawingPlatform[0].y - drawingPlatform[1].y, 2) >= 100)) {
                 // calculate left and right points
                 let left = (drawingPlatform[0].x - drawingPlatform[1].x < 0) ? 0 : 1;
                 let right = 1 - left;
@@ -663,6 +663,7 @@ export function targetBuilderControls (p, input){
                 holdingA = false;
                 grabbedItem = 0;
                 sounds.blunthit.play();
+                stageTemp.connected = getConnected(stageTemp);
               }
             }
           }
@@ -697,6 +698,18 @@ export function targetBuilderControls (p, input){
                   sounds.deny.play();
                   break;
                 case "platform":
+                  if (hoverItem[0] === "platform") {
+                    for (let n=0;n<stageTemp.ledge.length;n++) {
+                      if (stageTemp.ledge[n][0] === "platform" && stageTemp.ledge[n][1] === hoverItem[1]) {
+                        stageTemp.ledge.splice(n, 1);
+                        n--;
+                      }
+                    }
+                    stageTemp.connected[1].splice(hoverItem[1], 1);
+                  }
+                  stageTemp.platform.splice(hoverItem[1], 1);
+                  sounds.menuBack.play();
+                  break;
                 case "target":
                   stageTemp[hoverItem[0]].splice(hoverItem[1], 1);
                   sounds.menuBack.play();
@@ -717,6 +730,15 @@ export function targetBuilderControls (p, input){
                       }
                     }
                   }
+                  if (hoverItem[0] === "ground") {
+                    for (let n=0;n<stageTemp.ledge.length;n++) {
+                      if (stageTemp.ledge[n][0] === "ground" && stageTemp.ledge[n][1] === hoverItem[1]) {
+                        stageTemp.ledge.splice(n, 1);
+                        n--;
+                      }
+                    }
+                    stageTemp.connected[0].splice(hoverItem[1], 1);
+                  }
                   sounds.menuBack.play();
                   break;
                 case "polygonBG":
@@ -724,24 +746,19 @@ export function targetBuilderControls (p, input){
                   sounds.menuBack.play();
                   break;
                 case "polygon":
-                  /*let ledgeDeleteQueue = [];
-                  for (let j=0;j<stageTemp.ledge.length;j++){
-                    if (stageTemp.ledge[j][0] == hoverItem[1]){
-                      ledgeDeleteQueue.push(j);
-                    }
-                  }
-                  for (let k=0;k<ledgeDeleteQueue.length;k++){
-                    stageTemp.ledge.splice(ledgeDeleteQueue[k]-k,1);
-                  }
-                  for (let n=0;n<stageTemp.ledge.length;n++){
-                    if (stageTemp.ledge[n][0] > hoverItem[1]){
-                      stageTemp.ledge[n][0]--;
-                    }
-                  }*/
                   for (let j=0;j<stageTemp.polygonMap[hoverItem[1]].length;j++){
                     let type = stageTemp.polygonMap[hoverItem[1]][j][0];
                     let index = stageTemp.polygonMap[hoverItem[1]][j][1];
                     stageTemp[type].splice(index, 1);
+                    if (type === "ground") {
+                      for (let n=0;n<stageTemp.ledge.length;n++) {
+                        if (stageTemp.ledge[n][0] === "ground" && stageTemp.ledge[n][1] === index) {
+                          stageTemp.ledge.splice(n, 1);
+                          n--;
+                        }
+                      }
+                      stageTemp.connected[0].splice(index, 1);
+                    }
                     for (let p=0;p<stageTemp.polygonMap.length;p++){
                       for (let k=0;k<stageTemp.polygonMap[p].length;k++){
                         if (stageTemp.polygonMap[p][k][0] === type && stageTemp.polygonMap[p][k][1] > index){
@@ -758,6 +775,7 @@ export function targetBuilderControls (p, input){
                   break;
               }
               hoverItem = 0;
+              stageTemp.connected = getConnected(stageTemp);
             }
           }
           break;
