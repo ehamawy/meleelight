@@ -631,7 +631,7 @@ function findAndResolveCollisions ( i : number, input : any
   let horizIgnore = "none"; // ignore no horizontal surfaces by default
 
   if (player[i].phys.grounded) {
-    horizIgnore = "notGrounds"; // ignore ceilings and platforms when grounded (but not grounds)
+    horizIgnore = "all"; // ignore all horizontal surfaces when grounded
   }
   else {
     horizIgnore = notIgnoringPlatforms? "none" : "platforms";
@@ -681,6 +681,9 @@ function findAndResolveCollisions ( i : number, input : any
         console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform/corner/none");
         break;
     }
+  }
+  else {
+    player[i].phys.pos = collisionData[0];
   }
 
   player[i].phys.ECB1 = collisionData[3];

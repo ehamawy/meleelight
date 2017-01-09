@@ -20,7 +20,7 @@ import type {XOrY} from "../main/util/Vec2D";
 
 export const additionalOffset : number = 0.00001;
 const smallestECBWidth = 1.95;
-const maxRecursion = 30;
+const maxRecursion = 6;
 
 // -----------------------------------------------------
 // various utility functions
@@ -505,11 +505,12 @@ type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchin
                 | { event : "squash"  , midECB : ECB, tgtECB : ECB, object : CollisionObject}
                 | { event : "continue" }
 
-function resolveECB ( ecb1 : ECB, ecbp : ECB, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
-  return runSlideRoutine( ecb1, ecbp, ecbp, labelledSurfaces, null, { type : null, angular : null }, true, 0 );  
+function resolveECB ( ecb1 : ECB, ecbp : ECB, grounded : bool, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
+  return runSlideRoutine( ecb1, ecbp, ecbp, grounded, labelledSurfaces, null, { type : null, angular : null }, true, 0 );  
 }
 
 function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
+                        , grounded : bool
                         , labelledSurfaces : Array<LabelledSurface>
                         , oldTouchingDatum : null | SimpleTouchingDatum
                         , slidingAgainst : Sliding
@@ -536,7 +537,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
       }
       else {
         newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
-        output = runSlideRoutine ( tgtECB, newECBp, newECBp, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
+        output = runSlideRoutine ( tgtECB, newECBp, newECBp, grounded, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
       }
     }
     else { // slideDatum.event === "transfer" || slideDatum.event === "squash"
@@ -580,6 +581,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
 
       if (slideDatum.event === "transfer") {
         output = runSlideRoutine ( newSrcECB, newTgtECB, newECBp
+                                 , grounded
                                  , labelledSurfaces
                                  , newTouchingDatum
                                  , { type : newSlidingType
@@ -589,12 +591,13 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
       }
       else {
         const otherTgtECB = slideDatum.tgtECB;
-        const [squashTgtECB, abort] = agreeOnTargetECB(newSrcECB, otherTgtECB, newTgtECB, newECBp, same);
+        const [squashTgtECB, abort] = agreeOnTargetECB(newSrcECB, otherTgtECB, newTgtECB, newECBp, same, grounded);
         if (abort) {
           output = { ecb : srcECB, touching : oldTouchingDatum };
         }
         else {
           output = runSlideRoutine ( newSrcECB, squashTgtECB, newECBp
+                                   , grounded
                                    , labelledSurfaces
                                    , newTouchingDatum
                                    , { type : newSlidingType
@@ -845,8 +848,13 @@ function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : nul
     let t;
     if (getXOrYCoord(ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY) === 0) {
       xOrY = xOrY === "x" ? "y" : "x";
-      t = (getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY)) 
-        / (getXOrYCoord(  ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY));
+      if (getXOrYCoord(ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY) === 0) {
+        t = 1;
+      }
+      else {
+        t = (getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY)) 
+          / (getXOrYCoord(  ecbp[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY));
+      }
     }
     else {
       t = (getXOrYCoord(endECB[pt], xOrY) - getXOrYCoord(startECB[pt], xOrY)) 
@@ -854,10 +862,10 @@ function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : nul
     }
 
     let midECB;
-    if (t < 0) {
+    if (t <= 0) {
       midECB = startECB;
     }
-    else if (t > 1) {
+    else if (t >= 1) {
       midECB = ecbp;
     }
     else {
@@ -872,7 +880,7 @@ function updateECBp( startECB : ECB, endECB : ECB, ecbp : ECB, slidingType : nul
 };
 
 
-function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp : ECB, pt : number ) : [ECB, bool] {
+function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp : ECB, pt : number, grounded : bool ) : [ECB, bool] {
   let output;
 
   const flipPt = pt === 1 ? 3 : 1;
@@ -917,7 +925,7 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
       tgtECB[same] = new Vec2D(   otherTgtECB[same].x - sign * additionalOffset,   otherTgtECB[same].y );
       tgtECB[diff] = new Vec2D( closestTgtECB[diff].x + sign * additionalOffset, closestTgtECB[diff].y );
       tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-      tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+      tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
       tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
       tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
       output = [tgtECB, abort];
@@ -937,7 +945,7 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
       tgtECB[diff] = new Vec2D( intercept.x - sign*smallestECBWidth - sign*additionalOffset, intercept.y);
       const squashFactor = (tgtECB[same].x - tgtECB[diff].x) / (closestTgtECB[same].x - closestTgtECB[diff].x);
       tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-      tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+      tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
       tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
       tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
       output = [tgtECB, abort];
@@ -952,7 +960,7 @@ function agreeOnTargetECB( srcECB : ECB, fstTgtECB : ECB, sndTgtECB : ECB, ecbp 
         tgtECB[same] = new Vec2D(   otherTgtECB[same].x - sign * additionalOffset,   otherTgtECB[same].y );
         tgtECB[diff] = new Vec2D( closestTgtECB[diff].x + sign * additionalOffset, closestTgtECB[diff].y );
         tgtECB[2].y = tgtECB[same].y + squashFactor * (tgtECB[2].y - tgtECB[same].y);
-        tgtECB[0].y = tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
+        tgtECB[0].y = grounded ? srcECB[0].y : tgtECB[same].y + squashFactor * (tgtECB[0].y - tgtECB[same].y);
         tgtECB[2].x = (tgtECB[1].x + tgtECB[3].x)/2;
         tgtECB[0].x = (tgtECB[1].x + tgtECB[3].x)/2;
         output = [tgtECB, abort];
@@ -1108,15 +1116,16 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
     default:
       relevantSurfaces = stageWalls.concat(stageGrounds).concat(stageCeilings).concat(stagePlatforms);
       break;
-    case "notGrounds":
+    case "all":
       relevantSurfaces = stageWalls.concat(stageGrounds);
       break;
   }
 
-  const resolution = resolveECB( ecb1, ecbp, relevantSurfaces );
+  const grounded = horizIgnore === "all" ? true : false;
+  const resolution = resolveECB( ecb1, ecbp, grounded, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
-  const newSquashFactor = (newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x);
+  const newSquashFactor = Math.max(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x));
   let newSquashLocation = null;
   if (newTouching !== null) {
     if (newTouching.kind === "surface") {

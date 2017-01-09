@@ -67,15 +67,17 @@ export function drawStageInit() {
     }
 
     if (holiday == 1){
-      fg1.save();
-      fg1.globalAlpha = 1;
-      fg1.beginPath();
-      for (var j = 0; j < activeStage.box.length; j++) {
-        fg1.rect((activeStage.box[j].min.x * activeStage.scale) + activeStage.offset[0], (activeStage.box[j].max.y * -activeStage.scale) + activeStage.offset[1], (activeStage.box[j].max.x - activeStage.box[j].min.x) * activeStage.scale, (activeStage.box[j].max.y - activeStage.box[j].min.y) * activeStage.scale);
+      if (activeStage.box !== null && activeStage.box !== undefined) {
+        fg1.save();
+        fg1.globalAlpha = 1;
+        fg1.beginPath();
+        for (var j = 0; j < activeStage.box.length; j++) {
+          fg1.rect((activeStage.box[j].min.x * activeStage.scale) + activeStage.offset[0], (activeStage.box[j].max.y * -activeStage.scale) + activeStage.offset[1], (activeStage.box[j].max.x - activeStage.box[j].min.x) * activeStage.scale, (activeStage.box[j].max.y - activeStage.box[j].min.y) * activeStage.scale);
+        }
+        fg1.clip();
+        fg1.drawImage(scandypattern,0,0,1200,750);
+        fg1.restore();
       }
-      fg1.clip();
-      fg1.drawImage(scandypattern,0,0,1200,750);
-      fg1.restore();
       fg1.save();
       fg1.beginPath();
       for (var j = 0; j < activeStage.platform.length; j++) {
@@ -222,18 +224,22 @@ export function drawStage() {
     fg2.fillStyle = boxFill;
 
     if (holiday != 1){
-      for (var j = 0; j < activeStage.box.length; j++) {
-        fg2.fillRect((activeStage.box[j].min.x * activeStage.scale) + activeStage.offset[0], (activeStage.box[j].max.y * -activeStage.scale) + activeStage.offset[1], (activeStage.box[j].max.x - activeStage.box[j].min.x) * activeStage.scale, (activeStage.box[j].max.y - activeStage.box[j].min.y) * activeStage.scale);
-      }
-      for (let j=0;j<activeStage.polygon.length;j++){
-        let p = activeStage.polygon[j];
-        fg2.beginPath();
-        fg2.moveTo(p[0].x* activeStage.scale + activeStage.offset[0], p[0].y* -activeStage.scale + activeStage.offset[1]);
-        for (let n=1;n<p.length;n++) {
-          fg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0], p[n].y* -activeStage.scale + activeStage.offset[1]);
+      if (activeStage.box !== null && activeStage.box !== undefined) {
+        for (var j = 0; j < activeStage.box.length; j++) {
+          fg2.fillRect((activeStage.box[j].min.x * activeStage.scale) + activeStage.offset[0], (activeStage.box[j].max.y * -activeStage.scale) + activeStage.offset[1], (activeStage.box[j].max.x - activeStage.box[j].min.x) * activeStage.scale, (activeStage.box[j].max.y - activeStage.box[j].min.y) * activeStage.scale);
         }
-        fg2.closePath();
-        fg2.fill();
+      }
+      if (activeStage.polygon !== null && activeStage.polygon !== undefined) {
+        for (let j=0;j<activeStage.polygon.length;j++){
+          let p = activeStage.polygon[j];
+          fg2.beginPath();
+          fg2.moveTo(p[0].x* activeStage.scale + activeStage.offset[0], p[0].y* -activeStage.scale + activeStage.offset[1]);
+          for (let n=1;n<p.length;n++) {
+            fg2.lineTo(p[n].x * activeStage.scale + activeStage.offset[0], p[n].y* -activeStage.scale + activeStage.offset[1]);
+          }
+          fg2.closePath();
+          fg2.fill();
+        }
       }
       bg2.save();
       bg2.fillStyle = boxFillBG;
