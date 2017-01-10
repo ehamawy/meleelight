@@ -9,8 +9,9 @@ import {deepCopyObject} from "main/util/deepCopyObject";
 import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 import {setCustomTargetStages, customTargetStages} from "../stages/activeStage";
-import {intersectsAny, distanceToPolygon, distanceToLine} from "../stages/util/detectIntersections";
+import {intersectsAny, distanceToPolygon, distanceToLine, lineDistanceToLines} from "../stages/util/detectIntersections";
 import {getConnected} from "./util/getConnected";
+import {manhattanDist, euclideanDist} from "../main/linAlg";
 /* eslint-disable */
 
 export let drawConnectIndicator = false;
@@ -41,6 +42,8 @@ export let badAngleTimer = 0;
 export let badAnglePos = new Vec2D(0,0);
 export let tooSmallTimer = 0;
 export let tooSmallPos = new Vec2D(0,0);
+export let wallsTooCloseTimer = 0;
+export let wallsTooClosePos = new Vec2D(0,0);
 
 export var stageTemp = {
   box : [],
@@ -462,12 +465,12 @@ export function targetBuilderControls (p, input){
                         curIndex = nextIndex;
                       }
                     } else {
-                      tooSmallTimer = 60;
+                      tooSmallTimer = 120;
                       tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
                     }
                     drawingPolygon = [];
                   } else {
-                    tooSmallTimer = 60;
+                    tooSmallTimer = 120;
                     tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
                   }
                 } else {
@@ -505,7 +508,7 @@ export function targetBuilderControls (p, input){
               //RELEASE
               drawingPlatform[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
               // if width at least 10 start trying to build
-              if (Math.abs(drawingPlatform[0].x - drawingPlatform[1].x) >= 10 || (drawMode && Math.pow(drawingPlatform[0].x - drawingPlatform[1].x, 2) + Math.pow(drawingPlatform[0].y - drawingPlatform[1].y, 2) >= 100)) {
+              if (Math.abs(drawingPlatform[0].x - drawingPlatform[1].x) >= 10 || (drawMode && manhattanDist(drawingPlatform[0], drawingPlatform[1]) >= 10)) {
                 // calculate left and right points
                 let left = (drawingPlatform[0].x - drawingPlatform[1].x < 0) ? 0 : 1;
                 let right = 1 - left;
@@ -517,16 +520,16 @@ export function targetBuilderControls (p, input){
                   // calculate angle
                   let angle = Math.atan2(convertedRight.y - convertedLeft.y, convertedRight.x - convertedLeft.x);
                   // if angle is within limit, build it
-                  if (Math.abs(angle) <= Math.PI/6) {
+                  if (Math.abs(angle) <= Math.PI/6 && Math.abs(angle) >= -Math.PI/6) {
                     stageTemp.platform.push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
                   } else {
-                    badAngleTimer = 60;
+                    badAngleTimer = 120;
                     badAnglePos = new Vec2D(realCrossHair.x, realCrossHair.y);
                   }
                 }
                 //undoList.push("platform");
               } else {
-                tooSmallTimer = 60;
+                tooSmallTimer = 120;
                 tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
               }
               holdingA = false;
@@ -552,22 +555,35 @@ export function targetBuilderControls (p, input){
               //RELEASE
               drawingWall[1] = new Vec2D(realCrossHair.x, realCrossHair.y);
               // if magnitude is less than 10, say too small
-              if (Math.pow(drawingWall[0].x - drawingWall[1].x,2) + Math.pow(drawingWall[0].y - drawingWall[1].y,2) >= 100) {
+              if (manhattanDist(drawingWall[0], drawingWall[1]) >= 10) {
                 let left = (drawingWall[0].x - drawingWall[1].x < 0) ? 0 : 1;
                 let right = 1 - left;
                 let convertedLeft = new Vec2D((drawingWall[left].x - 600) / stageTemp.scale , (drawingWall[left].y - 375) / -stageTemp.scale);
                 let convertedRight = new Vec2D((drawingWall[right].x - 600) / stageTemp.scale , (drawingWall[right].y - 375) / -stageTemp.scale);
                 let angle = Math.atan2(convertedRight.y - convertedLeft.y, convertedRight.x - convertedLeft.x);
-                if (((wallType === "ground" || wallType === "ceiling") && Math.abs(angle) <= Math.PI/6) || ((wallType === "wallL" || wallType === "wallR") && Math.abs(angle) != 0 && Math.abs(angle) != Math.PI)) {
+                let distanceToOtherWalls;
+                if (wallType === "wallL") {
+                  distanceToOtherWalls = lineDistanceToLines([convertedLeft, convertedRight], stageTemp.wallR);
+                  console.log(distanceToOtherWalls);
+                }
+                else if (wallType === "wallR") {
+                  distanceToOtherWalls = lineDistanceToLines([convertedLeft, convertedRight], stageTemp.wallL);
+                  console.log(distanceToOtherWalls);
+                }
+                if (distanceToOtherWalls !== undefined && distanceToOtherWalls < 2) {
+                  wallsTooCloseTimer = 120;
+                  wallsTooClosePos = new Vec2D(realCrossHair.x, realCrossHair.y);
+                }
+                else if (((wallType === "ground" || wallType === "ceiling") && Math.abs(angle) <= Math.PI/6) || ((wallType === "wallL" || wallType === "wallR") && Math.abs(angle) != 0 && Math.abs(angle) != Math.PI)) {
                   stageTemp[wallType].push([new Vec2D(convertedLeft.x, convertedLeft.y), new Vec2D(convertedRight.x, convertedRight.y)]);
                   // if wanting to connect, check each case
                 } else {
-                  badAngleTimer = 60;
+                  badAngleTimer = 120;
                   badAnglePos = new Vec2D(realCrossHair.x, realCrossHair.y);
                 }
                 //undoList.push("platform");
               } else {
-                tooSmallTimer = 60;
+                tooSmallTimer = 120;
                 tooSmallPos = new Vec2D(realCrossHair.x, realCrossHair.y);
               }
               holdingA = false;
@@ -583,8 +599,8 @@ export function targetBuilderControls (p, input){
           ledgeHoverItem = 0;
           let found = findLine(realCrossHair, false, ["platform", "ground"], true);
           if (found) {
-            let toLeft = Math.pow(crossHairPos.x - stageTemp[hoverItem[0]][hoverItem[1]][0].x,2) + Math.pow(crossHairPos.y - stageTemp[hoverItem[0]][hoverItem[1]][0].y,2);
-            let toRight = Math.pow(crossHairPos.x - stageTemp[hoverItem[0]][hoverItem[1]][1].x,2) + Math.pow(crossHairPos.y - stageTemp[hoverItem[0]][hoverItem[1]][1].y,2);
+            let toLeft = manhattanDist(crossHairPos, stageTemp[hoverItem[0]][hoverItem[1]][0]);
+            let toRight = manhattanDist(crossHairPos, stageTemp[hoverItem[0]][hoverItem[1]][1]);
             if (toRight < toLeft) {
               ledgeHoverItem = [hoverItem[0], hoverItem[1], 1];
             } else {
@@ -788,7 +804,6 @@ export function targetBuilderControls (p, input){
               }
               hoverItem = 0;
               stageTemp.connected = getConnected(stageTemp);
-              console.log(stageTemp.ledge);
             }
           }
           break;
@@ -999,7 +1014,7 @@ export function drawTargetStage (){
     let pA = toPixel(stageTemp[e[0]][e[1]][e[2]]);
     let pB = toPixel(stageTemp[e[0]][e[1]][1-e[2]]);
     let ang = Math.atan2((pB.y - pA.y) , (pB.x - pA.x));
-    let magnitude = Math.sqrt(Math.pow(pB.y - pA.y, 2) + Math.pow(pB.x - pA.x, 2));
+    let magnitude = euclideanDist(pA, pB);
     let length = Math.min(0.25 * magnitude, 20);
     let pC = new Vec2D(pA.x + length * Math.cos(ang), pA.y + length * Math.sin(ang));
     ui.beginPath();
@@ -1375,17 +1390,24 @@ export function renderTargetBuilder (){
   ui.font = "13px Lucida Console, monaco, monospace";
   if (tooSmallTimer > 0) {
     tooSmallTimer--;
-    ui.fillStyle = "rgba(0,0,0," + Math.min(tooSmallTimer / 60, 1) + ")";
+    ui.fillStyle = "rgba(0,0,0," + Math.min(tooSmallTimer / 30, 1) + ")";
     ui.fillRect(tooSmallPos.x + 30, tooSmallPos.y, 80, 25);
-    ui.fillStyle = "rgba(255,255,255," + Math.min(tooSmallTimer / 60, 1) + ")";
+    ui.fillStyle = "rgba(255,255,255," + Math.min(tooSmallTimer / 30, 1) + ")";
     ui.fillText("Too small", tooSmallPos.x + 70, tooSmallPos.y + 17);
   }
   if (badAngleTimer > 0) {
     badAngleTimer--;
-    ui.fillStyle = "rgba(0,0,0," + Math.min(badAngleTimer / 60, 1) + ")";
+    ui.fillStyle = "rgba(0,0,0," + Math.min(badAngleTimer / 30, 1) + ")";
     ui.fillRect(badAnglePos.x + 30, badAnglePos.y, 80, 25);
-    ui.fillStyle = "rgba(255,255,255," + Math.min(badAngleTimer / 60, 1) + ")";
+    ui.fillStyle = "rgba(255,255,255," + Math.min(badAngleTimer / 30, 1) + ")";
     ui.fillText("Bad angle", badAnglePos.x + 70, badAnglePos.y + 17);
+  }
+  if (wallsTooCloseTimer > 0) {
+    wallsTooCloseTimer--;
+    ui.fillStyle = "rgba(0,0,0," + Math.min(wallsTooCloseTimer / 30, 1) + ")";
+    ui.fillRect(wallsTooClosePos.x + 25, wallsTooClosePos.y, 110, 25);
+    ui.fillStyle = "rgba(255,255,255," + Math.min(wallsTooCloseTimer / 30, 1) + ")";
+    ui.fillText("Walls too close", wallsTooClosePos.x + 70, wallsTooClosePos.y + 17);
   }
   if (targetTool == 5) {
     if (grabbedItem == 0) {

@@ -1,4 +1,5 @@
 // @flow
+/*eslint indent:1*/
 
 import {Vec2D} from "../../main/util/Vec2D";
 import {coordinateInterceptParameter} from "../../physics/environmentalCollision";
@@ -117,4 +118,21 @@ function linesOfPolygon( polygon : Polygon ) : Array<Line> {
     pt = polygon[i];
   }
   return lines;
+}
+
+function distanceBetweenLines( line1 : Line, line2 : Line) : number {
+  if (intersects(line1, line2)) {
+    return 0;
+  }
+  else {
+    return minimum( [ distanceToLine(line1[0], line2)
+                    , distanceToLine(line1[1], line2)
+                    , distanceToLine(line2[0], line1)
+                    , distanceToLine(line2[1], line1)
+                    ] );
+  }
+}
+
+export function lineDistanceToLines( thisLine : Line, otherLines : Array<Line>) : number {
+  return minimum( otherLines.map( (otherLine) => distanceBetweenLines(thisLine, otherLine)));
 }
