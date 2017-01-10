@@ -10,7 +10,7 @@ export function solveQuadraticEquation (a0 : number, a1 : number, a2 : number, s
       return false;
     }
   }
-  else if ( Math.abs( a0*a0*a2/(a1*a1) ) < 0.000001 ) {
+  else if ( Math.abs( a0*a0*a2/(a1*a1) ) < 1e-20 ) {
     return (- a0 / a1);
   }
   else {

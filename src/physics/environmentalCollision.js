@@ -1031,8 +1031,8 @@ export function groundedECBSquashFactor( ecbTop : Vec2D, ecbBottom : Vec2D, ceil
 // finds the ECB squash factor by inflating the ECB from the point on the ECB given by the angular parameter t
 // if angular parameter is null, instead inflates the ECB from its center
 function inflateECB ( ecb : ECB, t : null | number
+                    , focus : Vec2D
                     , relevantSurfaces : Array<LabelledSurface> ) : SquashDatum {
-  const focus = ecbFocusFromAngularParameter(ecb, t);
   const offset = additionalOffset/10;
   const pointlikeECB : ECB = [ new Vec2D ( focus.x         , focus.y - offset ) 
                              , new Vec2D ( focus.x + offset, focus.y          )
@@ -1052,29 +1052,31 @@ function inflateECB ( ecb : ECB, t : null | number
                         ? closestCollision.object.pt 
                         : closestCollision.object.angular
                       : t;
-    return { location : newLocation, factor : Math.max(offset, closestCollision.sweep - offset)}; // ECB angular parameter, sweeping parameter
+    return { location : newLocation, factor : Math.max(additionalOffset, closestCollision.sweep - additionalOffset)}; // ECB angular parameter, sweeping parameter
   }
 }
 
 function reinflateECB ( ecb : ECB, position : Vec2D
                       , relevantSurfaces : Array<LabelledSurface>
                       , oldecbSquashDatum : SquashDatum
+                      , grounded : bool
                       ) : [Vec2D, SquashDatum, ECB] {
   let q = 1;
   const angularParameter = oldecbSquashDatum.location;
   if (oldecbSquashDatum.factor < 1) {
-    q = 1 / oldecbSquashDatum.factor + additionalOffset/5;    
+    q = 1 / oldecbSquashDatum.factor + additionalOffset/20;
     const focus = ecbFocusFromAngularParameter(ecb, angularParameter);
     const fullsizeecb = [ new Vec2D ( q*ecb[0].x + (1-q)*focus.x , q*ecb[0].y + (1-q)*focus.y )
                         , new Vec2D ( q*ecb[1].x + (1-q)*focus.x , q*ecb[1].y + (1-q)*focus.y )
                         , new Vec2D ( q*ecb[2].x + (1-q)*focus.x , q*ecb[2].y + (1-q)*focus.y )
                         , new Vec2D ( q*ecb[3].x + (1-q)*focus.x , q*ecb[3].y + (1-q)*focus.y )
                         ];
-    const ecbSquashDatum = inflateECB (fullsizeecb, angularParameter, relevantSurfaces);    
-    const squashedecb = squashECBAt(fullsizeecb, ecbSquashDatum);
+    const ecbSquashDatum = inflateECB (fullsizeecb, angularParameter, focus, relevantSurfaces); 
+    const squashedecb = squashECBAt(fullsizeecb, { factor : ecbSquashDatum.factor, location : angularParameter });
     const newPosition = new Vec2D( position.x + squashedecb[0].x - ecb[0].x
-                                 , position.y + (angularParameter === 0 ? 0 : squashedecb[0].y - ecb[0].y));
+                                 , grounded ? position.y : position.y + squashedecb[0].y - ecb[0].y);
     const newAngular = ecbSquashDatum.location;
+    drawECB(squashedecb, "#ffff00");
     return [newPosition, ecbSquashDatum, squashedecb];
   }
   else {
@@ -1151,29 +1153,26 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
     }
   }
 
-  if (newSquashDatum.factor < 1 ) {
+  if (newSquashDatum.factor < 1) {
+    let squashingLocation = null;
     if (grounded) {
-      newSquashDatum.location = 0;
+      squashingLocation = 0;
     }
-    else if (newSquashDatum.location === null) {
-      newSquashDatum.location = ecbSquashDatum.location;
-    }
-    const firstSquashLocation = newSquashDatum.location;
     [ newPosition
     , newSquashDatum
     , newECBp ] = reinflateECB( newECBp, newPosition
                               , allSurfacesMinusPlatforms
-                              , newSquashDatum
+                              , { factor : newSquashDatum.factor, location : squashingLocation }
+                              , grounded
                               );
-    if (   !grounded
-        && newSquashDatum.location !== null
-        && newSquashDatum.factor < 1 ) {
+    if ( !grounded && newSquashDatum.factor < 1 ) {
       // reinflate a second time if it might help
       [ newPosition
       , newSquashDatum
       , newECBp ] = reinflateECB( newECBp, newPosition
                                 , allSurfacesMinusPlatforms
                                 , newSquashDatum
+                                , false
                                 );
     }
 
