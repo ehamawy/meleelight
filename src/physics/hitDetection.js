@@ -6,6 +6,7 @@ import {turnOffHitboxes, actionStates} from "physics/actionStateShortcuts";
 import {drawVfx} from "main/vfx/drawVfx";
 import {Vec2D} from "../main/util/Vec2D";
 import {Segment2D} from "../main/util/Segment2D";
+import {getSameAndOther} from "./environmentalCollision";
 /* eslint-disable */
 
 export let hitQueue = [];
@@ -442,8 +443,19 @@ export function executeRegularHit (input, v, a, h, shieldHit, isThrow, drawBounc
 
   if (!isThrow) {
     if (stageDamage) {
-      let ecbPoint = a === "ground" ? 0 : a === "ceiling" ? 2 : a === "wallL" ? 1 : 3;
-      player[v].hit.hitPoint = new Vec2D(player[v].phys.ECB1[ecbPoint].x, player[v].phys.ECB1[ecbPoint].y);
+      const angularParameter = a.angular;
+      const [same, other] = getSameAndOther(angularParameter);
+      const t = angularParameter - Math.floor(angularParameter);
+      let collisionPoint;
+      if ((same === 1 && other === 2) || (same === 3 && other === 0)) {
+        collisionPoint = new Vec2D( (1-t)*player[v].phys.ECBp[same].x+t*player[v].phys.ECBp[other].x
+                                  , (1-t)*player[v].phys.ECBp[same].y+t*player[v].phys.ECBp[other].y );
+      }
+      else {
+        collisionPoint = new Vec2D( (1-t)*player[v].phys.ECBp[other].x+t*player[v].phys.ECBp[same].x
+                                  , (1-t)*player[v].phys.ECBp[other].y+t*player[v].phys.ECBp[same].y );
+      }
+      player[v].hit.hitPoint = collisionPoint;
       player[v].hit.reverse = false;
       player[v].phys.stageDamageImmunity = 20;
     } else {
@@ -573,15 +585,24 @@ export function executeHits (input){
     const phantom = hitQueue[i][6] || false;
     // if a is a string, then it is stage damage
     const stageDamage = (a >= 0) ? false : true;
-    const hitbox = stageDamage ? {
-      offset : new Vec2D(0,0),
-      dmg : 10,
-      angle : a === "wallL" ? 180 : a === "wallR" ? 0 : a === "ground" ? 90 : 270,
-      kg : 0,
-      bk : 100,
-      sk : 50,
-      type : h
-    } : player[a].hitboxes.id[h];
+    let hitbox;
+    if (stageDamage) {
+      let normalAngle = Math.atan2(a.normal.y, a.normal.x);
+      if (normalAngle < 0) {
+        normalAngle += Math.PI;
+      }
+      hitbox = { offset : new Vec2D(0,0),
+                 dmg : 10,
+                 angle : normalAngle * 180 / Math.PI, // why are we using degrees again?
+                 kg : 0,
+                 bk : 100,
+                 sk : 50,
+                 type : h
+                }
+    }
+    else {
+      hitbox = player[a].hitboxes.id[h];
+    }
     
     // if in furafura, make sure sfx stops
     if (player[v].actionState == "FURAFURA") {
