@@ -301,7 +301,7 @@ function dealWithCeilingCollision( i : number, newPosition : Vec2D
                                  , ceilingIndex : number
                                  , input : any) : void {
   updatePosition(i, newPosition);
-  const ceiling = getSurfaceFromStage(["g", ceilingIndex], activeStage);
+  const ceiling = getSurfaceFromStage(["c", ceilingIndex], activeStage);
   const damageType = ceiling[2] === undefined ? null : ceiling[2].damageType;
 
   if (   damageType !== undefined && damageType !== null
