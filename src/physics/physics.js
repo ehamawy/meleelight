@@ -5,7 +5,7 @@ import {framesData, ecb} from "../main/characters";
 import {sounds} from "../main/sfx";
 import {gameSettings} from "../settings";
 import {actionStates, turboAirborneInterrupt, turboGroundedInterrupt, turnOffHitboxes} from "./actionStateShortcuts";
-import {getLaunchAngle, getHorizontalVelocity, getVerticalVelocity, getHorizontalDecay, getVerticalDecay} from "./hitDetection";
+import {getLaunchAngle, getHorizontalVelocity, getVerticalVelocity, getHorizontalDecay, getVerticalDecay, hitQueue} from "./hitDetection";
 import {lostStockQueue} from "../main/render";
 import {runCollisionRoutine, coordinateIntercept, additionalOffset, smallestECBWidth, groundedECBSquashFactor} from "./environmentalCollision";
 import {deepCopyObject} from "../main/util/deepCopyObject";
@@ -18,7 +18,6 @@ import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {moveECB, squashECBAt} from "../main/util/ecbTransform";
 import {subtract} from "../main/linAlg";
-import {hitQueue} from 'physics/hitDetection';
 
 // eslint-disable-next-line no-duplicate-imports
 import type {Connected} from "../stages/stage";
@@ -654,6 +653,9 @@ function findAndResolveCollisions ( i : number, input : any
     horizIgnore = notIgnoringPlatforms? "none" : "platforms";
   }
 
+  const isImmune = (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0);
+
+
   // type : [ Vec2D       , null | [string, number], null | [Vec2D, number], ECB ]
   //        [ new position, collision label        , ECB squash data       , final ECBp position ]
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1
@@ -662,6 +664,7 @@ function findAndResolveCollisions ( i : number, input : any
                                             , ecbSquashData[i]
                                             , horizIgnore
                                             , activeStage
+                                            , isImmune
                                             );
 
   ecbSquashData[i] = collisionData[2];

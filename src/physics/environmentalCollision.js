@@ -505,8 +505,8 @@ type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchin
                 | { event : "squash"  , midECB : ECB, tgtECB : ECB, object : CollisionObject}
                 | { event : "continue" }
 
-function resolveECB ( ecb1 : ECB, ecbp : ECB, grounded : bool, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
-  return runSlideRoutine( ecb1, ecbp, ecbp, grounded, labelledSurfaces, null, { type : null, angular : null }, true, 0 );  
+function resolveECB ( ecb1 : ECB, ecbp : ECB, grounded : bool, labelledSurfaces : Array<LabelledSurface>, isImmune : bool ) : ECBTouching {
+  return runSlideRoutine( ecb1, ecbp, ecbp, grounded, labelledSurfaces, null, { type : null, angular : null }, true, 0, isImmune );  
 }
 
 function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
@@ -515,7 +515,8 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                         , oldTouchingDatum : null | SimpleTouchingDatum
                         , slidingAgainst : Sliding
                         , final : bool
-                        , recursionCounter : number ) : ECBTouching {
+                        , recursionCounter : number
+                        , isImmune : bool ) : ECBTouching {
   let output; 
   if (recursionCounter > maxRecursion) {
     console.log("'runSlideRoutine': excessive recursion, aborting.");
@@ -525,7 +526,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
     output = { ecb : srcECB, touching : null };
   }
   else {
-    const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst );
+    const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst, isImmune );
     let newECBp = ecbp;
   
     if (slideDatum.event === "end") {
@@ -537,7 +538,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
       }
       else {
         newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
-        output = runSlideRoutine ( tgtECB, newECBp, newECBp, grounded, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
+        output = runSlideRoutine ( tgtECB, newECBp, newECBp, grounded, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1, isImmune);
       }
     }
     else { // slideDatum.event === "transfer" || slideDatum.event === "squash"
@@ -587,7 +588,8 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                                  , { type : newSlidingType
                                    , angular : angular }
                                  , newFinal
-                                 , recursionCounter + 1 );
+                                 , recursionCounter + 1
+                                 , isImmune );
       }
       else {
         const otherTgtECB = slideDatum.tgtECB;
@@ -603,7 +605,8 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                                    , { type : newSlidingType
                                      , angular : angular }
                                    , newFinal && final
-                                   , recursionCounter + 1 );
+                                   , recursionCounter + 1
+                                   , isImmune );
         }
       }     
     }
@@ -615,6 +618,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
 function slideECB ( srcECB : ECB, tgtECB : ECB
                   , labelledSurfaces : Array<LabelledSurface>
                   , slidingAgainst : Sliding
+                  , isImmune : bool
                   ) : SlideDatum {
   let output;
 
@@ -1093,6 +1097,7 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
                                    , ecbSquashDatum : SquashDatum
                                    , horizIgnore : string
                                    , stage : Stage
+                                   , isImmune : bool
                                    ) : [ Vec2D // new position
                                        , null | [string, number] // collision surface type and index
                                        , SquashDatum // ECB scaling data
@@ -1126,7 +1131,7 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   }
 
   const grounded = horizIgnore === "all" ? true : false;
-  const resolution = resolveECB( ecb1, ecbp, grounded, relevantSurfaces );
+  const resolution = resolveECB( ecb1, ecbp, grounded, relevantSurfaces, isImmune );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
   const newSquashFactor = Math.min(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x));
