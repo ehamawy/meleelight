@@ -7,9 +7,11 @@ import {gameSettings} from "../settings";
 import {actionStates, turboAirborneInterrupt, turboGroundedInterrupt, turnOffHitboxes} from "./actionStateShortcuts";
 import {getLaunchAngle, getHorizontalVelocity, getVerticalVelocity, getHorizontalDecay, getVerticalDecay, hitQueue} from "./hitDetection";
 import {lostStockQueue} from "../main/render";
-import {runCollisionRoutine, coordinateIntercept, additionalOffset, smallestECBWidth, groundedECBSquashFactor} from "./environmentalCollision";
+import {runCollisionRoutine, coordinateIntercept, additionalOffset, smallestECBWidth
+       , groundedECBSquashFactor, outwardsWallNormal, getSameAndOther} from "./environmentalCollision";
 import {deepCopyObject} from "../main/util/deepCopyObject";
 import {drawVfx} from "../main/vfx/drawVfx";
+import {getSurfaceFromStage} from "../stages/stage";
 import {activeStage} from "../stages/activeStage";
 import {Box2D} from "../main/util/Box2D";
 import {Vec2D} from "../main/util/Vec2D";
@@ -22,7 +24,8 @@ import {subtract} from "../main/linAlg";
 // eslint-disable-next-line no-duplicate-imports
 import type {Connected} from "../stages/stage";
 // eslint-disable-next-line no-duplicate-imports
-import type {SquashDatum} from "../main/util/ecbTransform";
+import type {ECB, SquashDatum} from "../main/util/ecbTransform";
+import type {DamageType} from "./damageTypes";
 
 
 function dealWithCollision(i : number, newCenter : Vec2D) : void {
@@ -41,9 +44,20 @@ function dealWithWallCollision (i : number, newCenter : Vec2D, wallType : string
     isRight = 1;
   }
 
-  if (activeStage["wall"+wallLabel][wallIndex][2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+  const wall = getSurfaceFromStage([wallType, wallIndex], activeStage);
+
+  /*
+  // the following computes the wall normal (works for grounds and ceilings too)
+  const xOrY = wallType === "l" || wallType === "r" ? "x" : "y";
+  const wallBottomOrLeft = xOrY === "x" ? extremePoint(wall, "b") : extremePoint(wall, "l");
+  const wallTopOrRight = xOrY === "x" ? extremePoint(wall, "t") : extremePoint(wall, "r");
+  const wallNormal = outwardsWallNormal(wallBottomOrLeft, wallTopOrRight, wallType);
+  // TODO
+  */
+
+  if (wall[2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
     // apply damage
-    hitQueue.push([i,"wall"+wallLabel,activeStage["wall"+wallLabel][wallIndex][2],false,false,true]);
+    hitQueue.push([i,"wall"+wallLabel,wall[2],false,false,true]);
   }
   else if (player[i].actionState === "DAMAGEFLYN") {
     if (player[i].hit.hitlag === 0) {
@@ -109,6 +123,15 @@ function dealWithGroundCollision(i : number, alreadyGrounded : boolean
       land(i, ecbpBottom, 0, groundIndex, input);
     }
   }
+};
+
+function dealWithCornerCollision(i : number, ecb : ECB, angularParameter : number, cornerDamageType : DamageType) {
+  const insideECBType = angularParameter < 2 ? "l" : "r";
+  const [same, other] = getSameAndOther(angularParameter);
+  const lowerECBPoint = other === 2 ? ecb[same] : ecb[0];
+  const upperECBPoint = other === 2 ? ecb[2] : ecb[same];
+  const normal = outwardsWallNormal(lowerECBPoint, upperECBPoint, insideECBType);
+  // TODO: finish this
 };
 
 function fallOffGround(i : number, side : string
@@ -655,9 +678,7 @@ function findAndResolveCollisions ( i : number, input : any
 
   const isImmune = (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0);
 
-
-  // type : [ Vec2D       , null | [string, number], null | [Vec2D, number], ECB ]
-  //        [ new position, collision label        , ECB squash data       , final ECBp position ]
+  // type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1
                                             , player[i].phys.ECBp
                                             , player[i].phys.pos
@@ -667,15 +688,19 @@ function findAndResolveCollisions ( i : number, input : any
                                             , isImmune
                                             );
 
-  ecbSquashData[i] = collisionData[2];
+  ecbSquashData[i] = collisionData.squashDatum;
 
-  if ( collisionData[1] !== null ) {
-    const newPosition = collisionData[0];
-    const newECB = collisionData[3];
-    const surfaceLabel = collisionData[1][0];
-    const surfaceIndex = collisionData[1][1];
+  const newPosition = collisionData.position;
+  const newECB = collisionData.ecb;
+  const touchingDatum = collisionData.touching;
 
-    switch(surfaceLabel[0]) {
+  if (touchingDatum === null) {
+    dealWithCollision(i, newPosition);
+  }
+  else if (touchingDatum.kind === "surface") {
+    const surfaceLabel = touchingDatum.type;
+    const surfaceIndex = touchingDatum.index;
+    switch(surfaceLabel[0].toLowerCase()) {
       case "l": // player touching left wall
         notTouchingWalls[0] = false;
         dealWithWallCollision(i, newPosition, "l", surfaceIndex, input);
@@ -693,20 +718,18 @@ function findAndResolveCollisions ( i : number, input : any
       case "p": // player landed on platform
         dealWithPlatformCollision(i, player[i].phys.grounded, newPosition, newECB[0], surfaceIndex, input);
         break;
-      case "x": // corner collision
-      case "n": // wall collision but player no longer in contact with wall
-        dealWithCollision(i, newPosition);
-        break;
       default:
-        console.log("error: unrecognised surface type, not left/right/ground/ceiling/platform/corner/none");
+        console.log("error in 'findAndResolveCollisions': unrecognised surface type.");
         break;
     }
   }
-  else {
-    player[i].phys.pos = collisionData[0];
+  else if (touchingDatum.kind === "corner") {
+    const angularParameter = touchingDatum.angular;
+    const cornerDamageType = touchingDatum.damageType !== undefined ? touchingDatum.damageType : null;
+    dealWithCornerCollision(i, newECB, angularParameter, cornerDamageType);
   }
 
-  player[i].phys.ECB1 = collisionData[3];
+  player[i].phys.ECB1 = newECB;
 
   // finally, calculate how much squashing is required by the ground
   if (player[i].phys.grounded) {

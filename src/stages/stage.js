@@ -3,8 +3,14 @@
 import {Vec2D} from "../main/util/Vec2D";
 import {Box2D} from "../main/util/Box2D";
 
-type Surface = [Vec2D, Vec2D];
-type SurfaceLabel = [string, index];
+import type {DamageType} from "../physics/damageTypes";
+
+export type SurfaceProperties = { damageType : DamageType };
+
+export type Surface = [Vec2D, Vec2D, void | SurfaceProperties];
+type SurfaceLabel = [string, number];
+export type LabelledSurface = {surface : Surface, label : SurfaceLabel};
+
 export type Connected = [ Array< [ null | SurfaceLabel, null | SurfaceLabel ] >, Array< [ null | SurfaceLabel, null | SurfaceLabel ] >];
 
 export type Stage = {
@@ -26,8 +32,6 @@ export type Stage = {
   offset        : [number, number],
   connected?    : Connected
 }
-
-export type LabelledSurface = [[Vec2D, Vec2D], [string, number]];
 
 export function getSurfaceFromStage ( surfaceTypeAndIndex : [string, number], stage : Stage) : Surface {
   const surfaceType  = surfaceTypeAndIndex[0];

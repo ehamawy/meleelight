@@ -14,9 +14,10 @@ import {drawECB} from "../main/util/drawECB";
 // eslint-disable-next-line no-duplicate-imports
 import type {ECB, SquashDatum} from "../main/util/ecbTransform";
 // eslint-disable-next-line no-duplicate-imports
-import type {Stage, LabelledSurface} from "../stages/stage";
+import type {Stage, Surface, LabelledSurface} from "../stages/stage";
 // eslint-disable-next-line no-duplicate-imports
 import type {XOrY} from "../main/util/Vec2D";
+import type {DamageType} from "./damageTypes";
 
 export const additionalOffset : number = 0.00001;
 export const smallestECBWidth = 1.95;
@@ -65,9 +66,7 @@ function turn(number : number, counterclockwise : boolean = true ) : number {
   }
 };
 
-// returns true if the vector is moving into the wall, false otherwise
-// need to be careful that arguments 2 and 3 are given in the correct order to get the expected result
-function movingInto (vec : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Vec2D, wallType : string) : boolean {
+export function outwardsWallNormal( wallBottomOrLeft : Vec2D, wallTopOrRight : Vec2D, wallType : string) : Vec2D {
   let sign = 1;
   switch (wallType) {
     case "l": // left wall
@@ -80,9 +79,13 @@ function movingInto (vec : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Vec
     default: // right wall, ceiling
       break;
   }
-  // const outwardsWallNormal = new Vec2D ( sign * (wallTopOrRight.y - wallBottomOrLeft.y), sign*( wallBottomOrLeft.x-wallTopOrRight.x )  );
-  // return ( dotProd ( vec, outwardsWallNormal ) < 0 );
-  return ( dotProd ( vec, new Vec2D ( sign * (wallTopOrRight.y - wallBottomOrLeft.y), sign*(wallBottomOrLeft.x-wallTopOrRight.x) ) ) < 0);
+  return new Vec2D ( sign * (wallTopOrRight.y - wallBottomOrLeft.y), sign*( wallBottomOrLeft.x-wallTopOrRight.x ));
+}
+
+// returns true if the vector is moving into the wall, false otherwise
+// need to be careful that arguments 2 and 3 are given in the correct order to get the expected result
+function movingInto (vec : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Vec2D, wallType : string) : boolean {
+  return dotProd ( vec, outwardsWallNormal(wallBottomOrLeft, wallTopOrRight, wallType) ) < 0;
 };
 
 // returns true if point is to the right of a "left" wall, or to the left of a "right" wall,
@@ -90,7 +93,7 @@ function movingInto (vec : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Vec
 function isOutside (point : Vec2D, wallTopOrRight : Vec2D, wallBottomOrLeft : Vec2D, wallType : string) : boolean {
   //const vec = new Vec2D ( point.x - wallBottom.x, point.y - wallBottom.y );
   //return ( !movingInto(vec, wallTop, wallBottom, wallType ) );
-  return ( !movingInto( new Vec2D ( point.x - wallBottomOrLeft.x, point.y - wallBottomOrLeft.y ), wallTopOrRight, wallBottomOrLeft, wallType ) );
+  return !movingInto( new Vec2D ( point.x - wallBottomOrLeft.x, point.y - wallBottomOrLeft.y ), wallTopOrRight, wallBottomOrLeft, wallType );
 };
 
 // say line1 passes through the two points p1 = (x1,y1), p2 = (x2,y2)
@@ -126,7 +129,7 @@ export function coordinateIntercept (line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec
 
 // first: point sweeping functions
 
-export type PointSweepResult = { sweep : number, kind : "surface", surface : [Vec2D, Vec2D], type : string, index : number, pt : number }
+export type PointSweepResult = { sweep : number, kind : "surface", surface : Surface, type : string, index : number, pt : number }
 
 // finds whether the ECB impacted a surface on one of its vertices
 function runPointSweep ( ecb1 : ECB, ecbp : ECB, same : number
@@ -456,8 +459,8 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
 // ----------------------------------------------------------------------------------------------------------------------------------
 // some helper functions to return the closest collision (collision with smallest sweeping parameter)
 
-type TouchingDatum = null | { sweep : number, object : { kind : "surface", surface : [Vec2D, Vec2D], type : string, index : number, pt : number} 
-                                                     | { kind : "corner", corner : Vec2D, angular : number } 
+type TouchingDatum = null | { sweep : number, object : { kind : "surface", surface : Surface, type : string, index : number, pt : number} 
+                                                     | { kind : "corner", corner : Vec2D, angular : number, damageType? : DamageType } 
                             }
 
 // this function finds the first (non-ignored) collision as the ECB1 moves to the ECBp
@@ -493,10 +496,11 @@ function findClosestCollision( ecb1 : ECB, ecbp : ECB
 // ECB sliding
 // we attempt to move the ECB1 to the ECBp, sliding it against surfaces/corners as it encounters them
 
-type SimpleTouchingDatum = { kind : "surface", type : string, index : number, pt : number } | { kind : "corner", angular : number }
+type SimpleTouchingDatum = { kind : "surface", type : string, index : number, pt : number, damageType? : DamageType } 
+                         | { kind : "corner", angular : number, damageType? : DamageType }
 
-type CollisionObject = { kind : "surface", surface : [Vec2D, Vec2D], type : string, pt : number, index : number } 
-                     | { kind : "corner", corner : Vec2D, angular : number }
+type CollisionObject = { kind : "surface", surface : Surface, type : string, pt : number, index : number } 
+                     | { kind : "corner", corner : Vec2D, angular : number, damageType? : DamageType }
 
 type ECBTouching = { ecb : ECB, touching : null | SimpleTouchingDatum };
 type Sliding = { type : null | "l" | "r" | "c", angular : null | number };
@@ -636,7 +640,50 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
     const midECB = interpolateECB(srcECB, tgtECB, r);
     const collisionObject = touchingDatum.object;
 
-    if ( slidingAgainst.type === null ) {
+    // ------------------------------------------------------------------------------------------------------------------------------
+    // damaging objects cause premature end to sliding
+
+    let damageType = null;
+    if (!isImmune) {
+      if (collisionObject.kind === "surface") {
+        const surfaceProperties = collisionObject.surface[2];
+        if (surfaceProperties !== null && surfaceProperties !== undefined) {
+          damageType = surfaceProperties.damageType;
+        }
+      }
+      else if (collisionObject.kind === "corner") {
+        damageType = collisionObject.damageType;
+      }
+    }
+
+    if (damageType !== null && damageType !== undefined) {
+      if (collisionObject.kind === "surface") {
+        //console.log("'slideECB': sliding interrupted by collision with damaging surface.");
+        output = { event : "end"
+                 , finalECB : midECB
+                 , touching : { kind : "surface"
+                              , type : collisionObject.type
+                              , index : collisionObject.index
+                              , pt : collisionObject.pt 
+                              , damageType : damageType
+                              }
+                 };
+      }
+      else {
+        //console.log("'slideECB': sliding interrupted by collision with damaging corner.");
+        output = { event : "end"
+                 , finalECB : midECB
+                 , touching : { kind : "corner"
+                              , angular : collisionObject.angular
+                              , damageType : damageType
+                              }
+                 };
+      }
+    }
+
+    // ------------------------------------------------------------------------------------------------------------------------------
+
+    else if ( slidingAgainst.type === null ) {
       if ( collisionObject.kind === "surface" ) {
         if (collisionObject.type === "g" || collisionObject.type === "p") {
           //console.log("'slideECB': sliding interrupted by landing.");
@@ -992,7 +1039,7 @@ function getAngularParameter ( t : number, same : number, other : number) {
   }
 };
 
-function getSameAndOther( a : number ) : [number, number] {
+export function getSameAndOther( a : number ) : [number, number] {
   if (a < 1) {
     return [1, 0];
   }
@@ -1092,17 +1139,15 @@ function reinflateECB ( ecb : ECB, position : Vec2D
 // ----------------------------------------------------------------------------------------------------------------------------------
 // main collision routine
 
+type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
+
 // this function initialises necessary data and then calls the main collision routine loop
 export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
                                    , ecbSquashDatum : SquashDatum
                                    , horizIgnore : string
                                    , stage : Stage
                                    , isImmune : bool
-                                   ) : [ Vec2D // new position
-                                       , null | [string, number] // collision surface type and index
-                                       , SquashDatum // ECB scaling data
-                                       , ECB // final ECB to become next frame ECB1
-                                       ] {
+                                   ) : CollisionRoutineResult {
 
   // --------------------------------------------------------------
   // BELOW: this is recomputed every frame and should be avoided
@@ -1183,6 +1228,6 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
 
   } 
 
-  return [ newPosition, collisionLabel, newSquashDatum, newECBp ];
+  return { position : newPosition, touching : newTouching, squashDatum : newSquashDatum, ecb: newECBp };
 
 };
