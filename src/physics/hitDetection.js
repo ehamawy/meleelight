@@ -327,7 +327,7 @@ export function cssHits(input) {
   }
 }
 
-export function executeSheildHit(input, v, a, h, damage) {
+export function executeShieldHit(input, v, a, h, damage) {
   if (!player[v].phys.powerShieldActive) {
     player[v].phys.shieldHP -= damage;
     if (player[v].phys.shieldHP < 0) {

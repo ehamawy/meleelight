@@ -504,15 +504,15 @@ type CollisionObject = { kind : "surface", surface : Surface, type : string, pt 
 
 type PlayerStatusInfo = { grounded : bool, ignoringPlatforms : bool, immune : bool };
 
-type ECBTouching = { ecb : ECB, touching : null | SimpleTouchingDatum };
+type ECBDatum = { ecb : ECB, touching : null | SimpleTouchingDatum, squashed : bool };
 type Sliding = { type : null | "l" | "r" | "c", angular : null | number };
 type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchingDatum } 
                 | { event : "transfer", midECB : ECB, object : CollisionObject }
                 | { event : "squash"  , midECB : ECB, tgtECB : ECB, object : CollisionObject}
                 | { event : "continue" }
 
-function resolveECB ( ecb1 : ECB, ecbp : ECB, playerStatusInfo : PlayerStatusInfo, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
-  return runSlideRoutine( ecb1, ecbp, ecbp, playerStatusInfo, labelledSurfaces, null, { type : null, angular : null }, true, 0);  
+function resolveECB ( ecb1 : ECB, ecbp : ECB, playerStatusInfo : PlayerStatusInfo, labelledSurfaces : Array<LabelledSurface> ) : ECBDatum {
+  return runSlideRoutine( ecb1, ecbp, ecbp, playerStatusInfo, labelledSurfaces, null, { type : null, angular : null }, false, true, 0);  
 }
 
 function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
@@ -520,30 +520,34 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                         , labelledSurfaces : Array<LabelledSurface>
                         , oldTouchingDatum : null | SimpleTouchingDatum
                         , slidingAgainst : Sliding
+                        , squashed : bool
                         , final : bool
-                        , recursionCounter : number ) : ECBTouching {
+                        , recursionCounter : number ) : ECBDatum {
   let output; 
   if (recursionCounter > maxRecursion) {
     console.log("'runSlideRoutine': excessive recursion, aborting.");
     drawECB(srcECB, "#286ee0");
     drawECB(tgtECB, "#f49930");
     drawECB(ecbp, "#fff9ad");
-    output = { ecb : srcECB, touching : null };
+    output = { ecb : srcECB, touching : null, squashed : squashed };
   }
   else {
     const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst, playerStatusInfo );
     let newECBp = ecbp;
   
     if (slideDatum.event === "end") {
-      output = { ecb : slideDatum.finalECB, touching : slideDatum.touching };
+      output = { ecb : slideDatum.finalECB, touching : slideDatum.touching, squashed : squashed };
     }
     else if (slideDatum.event === "continue") {
       if (final) {
-        output = { ecb : tgtECB, touching : oldTouchingDatum };
+        output = { ecb : tgtECB, touching : oldTouchingDatum, squashed : squashed };
       }
       else {
         newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
-        output = runSlideRoutine ( tgtECB, newECBp, newECBp, playerStatusInfo, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
+        output = runSlideRoutine ( tgtECB, newECBp, newECBp, playerStatusInfo
+                                 , labelledSurfaces, oldTouchingDatum
+                                 , slidingAgainst, squashed
+                                 , true, recursionCounter + 1);
       }
     }
     else { // slideDatum.event === "transfer" || slideDatum.event === "squash"
@@ -592,6 +596,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                                  , newTouchingDatum
                                  , { type : newSlidingType
                                    , angular : angular }
+                                 , squashed
                                  , newFinal
                                  , recursionCounter + 1 );
       }
@@ -599,7 +604,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
         const otherTgtECB = slideDatum.tgtECB;
         const [squashTgtECB, abort] = agreeOnTargetECB(newSrcECB, otherTgtECB, newTgtECB, newECBp, same, playerStatusInfo.grounded);
         if (abort) {
-          output = { ecb : srcECB, touching : oldTouchingDatum };
+          output = { ecb : srcECB, touching : oldTouchingDatum, squashed : squashed };
         }
         else {
           output = runSlideRoutine ( newSrcECB, squashTgtECB, newECBp
@@ -608,6 +613,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
                                    , newTouchingDatum
                                    , { type : newSlidingType
                                      , angular : angular }
+                                   , true
                                    , newFinal && final
                                    , recursionCounter + 1 );
         }
@@ -1160,16 +1166,13 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   // --------------------------------------------------------------
 
   const grounded = playerStatusInfo.grounded;
-  const ignoringPlatforms = playerStatusInfo.ignoringPlatforms;
-  const isImmune = playerStatusInfo.immune;
 
   let horizIgnore = "none"; // ignore no horizontal surfaces by default
-
   if (grounded) {
     horizIgnore = "all"; // ignore all horizontal surfaces when grounded
   }
   else {
-    horizIgnore = ignoringPlatforms? "platforms" : "none";
+    horizIgnore = playerStatusInfo.ignoringPlatforms ? "platforms" : "none";
   }
 
   const allSurfacesMinusPlatforms = stageWalls.concat(stageGrounds).concat(stageCeilings);
@@ -1183,14 +1186,15 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
       relevantSurfaces = stageWalls.concat(stageGrounds).concat(stageCeilings).concat(stagePlatforms);
       break;
     case "all":
-      relevantSurfaces = stageWalls;//.concat(stageGrounds);
+      relevantSurfaces = stageWalls;
       break;
   }
 
   const resolution = resolveECB( ecb1, ecbp, playerStatusInfo, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
-  const newSquashFactor = Math.min(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x));
+  const newSquashFactor = resolution.squashed ? Math.min(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x))
+                                              : 1;
   let newSquashLocation = null;
   if (newTouching !== null) {
     if (newTouching.kind === "surface") {

@@ -28,12 +28,35 @@ import type {ECB, SquashDatum} from "../main/util/ecbTransform";
 import type {DamageType} from "./damageTypes";
 
 
-function dealWithCollision(i : number, newCenter : Vec2D) : void {
-  player[i].phys.pos = newCenter;
+function updatePosition ( i : number, newPosition : Vec2D ) : void {
+  player[i].phys.pos = newPosition;
 };
 
-function dealWithWallCollision (i : number, newCenter : Vec2D, wallType : string, wallIndex : number, input : any) : void {
-  player[i].phys.pos = newCenter;
+function dealWithDamagingStageCollision ( i : number, normal : Vec2D, objectType : string, damageType : DamageType ) : void {
+  let damageTypeIndex = -1;
+  switch(damageType) {
+    case "fire":
+      damageTypeIndex = 3;
+      break;
+    case "electric":
+      damageTypeIndex = 4;
+      break;
+    case "slash":
+      damageTypeIndex = 1;
+      break;
+    case "darkness":
+      damageTypeIndex = 5;
+      break;
+    default:
+      break;
+  }
+  if (damageTypeIndex !== -1) {
+    hitQueue.push([i,objectType,damageTypeIndex,false,false,true]);
+  }
+}
+
+function dealWithWallCollision ( i : number, newPosition : Vec2D, wallType : string, wallIndex : number, input : any ) : void {
+  updatePosition(i, newPosition);
 
   let wallLabel = "L";
   let sign = -1;
@@ -45,19 +68,16 @@ function dealWithWallCollision (i : number, newCenter : Vec2D, wallType : string
   }
 
   const wall = getSurfaceFromStage([wallType, wallIndex], activeStage);
+  const damageType = wall[2] === undefined ? null : wall[2].damageType;
 
-  /*
-  // the following computes the wall normal (works for grounds and ceilings too)
-  const xOrY = wallType === "l" || wallType === "r" ? "x" : "y";
-  const wallBottomOrLeft = xOrY === "x" ? extremePoint(wall, "b") : extremePoint(wall, "l");
-  const wallTopOrRight = xOrY === "x" ? extremePoint(wall, "t") : extremePoint(wall, "r");
-  const wallNormal = outwardsWallNormal(wallBottomOrLeft, wallTopOrRight, wallType);
-  // TODO
-  */
+  if (   damageType !== undefined && damageType !== null 
+      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    const wallBottom = extremePoint(wall, "b");
+    const wallTop = extremePoint(wall,"t");
+    const wallNormal = outwardsWallNormal(wallBottom, wallTop, wallType);
 
-  if (wall[2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
     // apply damage
-    hitQueue.push([i,"wall"+wallLabel,wall[2],false,false,true]);
+    dealWithDamagingStageCollision(i, wallNormal, "wall"+wallLabel, damageType);
   }
   else if (player[i].actionState === "DAMAGEFLYN") {
     if (player[i].hit.hitlag === 0) {
@@ -98,26 +118,44 @@ function dealWithWallCollision (i : number, newCenter : Vec2D, wallType : string
 
 };
 
-function dealWithPlatformCollision(i : number, alreadyGrounded : boolean
-                                  , newCenter : Vec2D, ecbpBottom : Vec2D
+function dealWithPlatformCollision( i : number, alreadyGrounded : boolean
+                                  , newPosition : Vec2D, ecbpBottom : Vec2D
                                   , platformIndex : number, input : any) : void {
-  if (player[i].hit.hitlag > 0 || alreadyGrounded) {
-    player[i].phys.pos = newCenter;
+  const platform = getSurfaceFromStage(["p", platformIndex], activeStage);
+  const damageType = platform[2] === undefined ? null : platform[2].damageType;
+
+  if (    damageType !== undefined && damageType !== null 
+       && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    const platLeft = extremePoint(platform, "l");
+    const platRight = extremePoint(platform,"r");
+    const platNormal = outwardsWallNormal(platLeft, platRight, "p");
+    // apply damage
+    dealWithDamagingStageCollision(i, platNormal, "ground", damageType);
+  }
+  else if (player[i].hit.hitlag > 0 || alreadyGrounded) {
+    updatePosition(i, newPosition);
   }
   else {
     land(i, ecbpBottom, 1, platformIndex, input);
   }
 };
 
-function dealWithGroundCollision(i : number, alreadyGrounded : boolean
-                                , newCenter : Vec2D, ecbpBottom : Vec2D
+function dealWithGroundCollision( i : number, alreadyGrounded : boolean
+                                , newPosition : Vec2D, ecbpBottom : Vec2D
                                 , groundIndex : number, input : any) : void {
-  if (activeStage.ground[groundIndex][2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+  const ground = getSurfaceFromStage(["g", groundIndex], activeStage);
+  const damageType = ground[2] === undefined ? null : ground[2].damageType;
+
+  if (   damageType !== undefined && damageType !== null
+      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    const groundLeft = extremePoint(ground, "l");
+    const groundRight = extremePoint(ground,"r");
+    const groundNormal = outwardsWallNormal(groundLeft, groundRight, "g");
     // apply damage
-    hitQueue.push([i,"ground",activeStage.ground[groundIndex][2],false,false,true]);
+    dealWithDamagingStageCollision(i, groundNormal, "ground", damageType);
   } else {
     if (player[i].hit.hitlag > 0 || alreadyGrounded) {
-      player[i].phys.pos = newCenter;
+      updatePosition(i, newPosition);
     }
     else {
       land(i, ecbpBottom, 0, groundIndex, input);
@@ -125,16 +163,8 @@ function dealWithGroundCollision(i : number, alreadyGrounded : boolean
   }
 };
 
-function dealWithCornerCollision(i : number, ecb : ECB, angularParameter : number, cornerDamageType : DamageType) {
-  const insideECBType = angularParameter < 2 ? "l" : "r";
-  const [same, other] = getSameAndOther(angularParameter);
-  const lowerECBPoint = other === 2 ? ecb[same] : ecb[0];
-  const upperECBPoint = other === 2 ? ecb[2] : ecb[same];
-  const normal = outwardsWallNormal(lowerECBPoint, upperECBPoint, insideECBType);
-  // TODO: finish this
-};
 
-function fallOffGround(i : number, side : string
+function fallOffGround( i : number, side : string
                       , groundEdgePosition : Vec2D
                       , disableFall : bool, input : any) : [boolean, boolean] {
   let [stillGrounded, backward] = [true,false];
@@ -179,7 +209,7 @@ function fallOffGround(i : number, side : string
 };
 
 // ground type and index is a pair, either ["g", index] or ["p", index]
-function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex : [string, number]
+function dealWithGround( i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex : [string, number]
                        , connected : ?Connected, input : any) : [boolean, boolean] {
   const leftmostGroundPoint  = extremePoint(ground,"l");
   const rightmostGroundPoint = extremePoint(ground,"r");
@@ -265,15 +295,22 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
   return [stillGrounded, backward];
 };
 
-function dealWithCeilingCollision(i : number, newCenter : Vec2D
+function dealWithCeilingCollision( i : number, newPosition : Vec2D
                                  , ecbTop : Vec2D
                                  , ceilingIndex : number
                                  , input : any) : void {
-  player[i].phys.pos = newCenter;
-  if (activeStage.ceiling[ceilingIndex][2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+  updatePosition(i, newPosition);
+  const ceiling = getSurfaceFromStage(["g", ceilingIndex], activeStage);
+  const damageType = ceiling[2] === undefined ? null : ceiling[2].damageType;
+
+  if (   damageType !== undefined && damageType !== null
+      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    const ceilingLeft = extremePoint(ceiling, "l");
+    const ceilingRight = extremePoint(ceiling,"r");
+    const ceilingNormal = outwardsWallNormal(ceilingLeft, ceilingRight, "c");
     // apply damage
-    hitQueue.push([i,"ceiling",activeStage.ceiling[ceilingIndex][2],false,false,true]);
-  }
+    dealWithDamagingStageCollision(i, ceilingNormal, "ceiling", damageType);
+  } 
   else if (actionStates[characterSelections[i]][player[i].actionState].headBonk) {
     if (player[i].hit.hitstun > 0) {
       if (player[i].phys.techTimer > 0) {
@@ -289,10 +326,24 @@ function dealWithCeilingCollision(i : number, newCenter : Vec2D
   }
 };
 
-export function land (i : number, newCenter : Vec2D
+function dealWithCornerCollision(i : number, newPosition : Vec2D, ecb : ECB, angularParameter : number, damageType : DamageType) {
+  updatePosition(i, newPosition);
+  const insideECBType = angularParameter < 2 ? "l" : "r";
+  const [same, other] = getSameAndOther(angularParameter);
+  const lowerECBPoint = other === 2 ? ecb[same] : ecb[0];
+  const upperECBPoint = other === 2 ? ecb[2] : ecb[same];
+  const normal = outwardsWallNormal(lowerECBPoint, upperECBPoint, insideECBType);
+  const wallType = "wall"+(same === 1 ? "L":"R");
+  if (   damageType !== undefined && damageType !== null
+      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    dealWithDamagingStageCollision(i, normal, wallType, damageType);
+  }
+};
+
+export function land (i : number, newPosition : Vec2D
                      ,t : number ,j : number
                      , input : any) : void {
-  player[i].phys.pos = newCenter;
+  player[i].phys.pos = newPosition;
   player[i].phys.grounded = true;
   player[i].phys.doubleJumped = false;
   player[i].phys.jumpsUsed = 0;
@@ -670,8 +721,7 @@ function findAndResolveCollisions ( i : number, input : any
 
   const playerStatusInfo = { ignoringPlatforms : !notIgnoringPlatforms
                            , grounded : player[i].phys.grounded
-                           , immune : (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0)
-                           }
+                           , immune : (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0) };
 
   // type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1
@@ -689,7 +739,7 @@ function findAndResolveCollisions ( i : number, input : any
   const touchingDatum = collisionData.touching;
 
   if (touchingDatum === null) {
-    dealWithCollision(i, newPosition);
+    updatePosition(i, newPosition);
   }
   else if (touchingDatum.kind === "surface") {
     const surfaceLabel = touchingDatum.type;
@@ -720,7 +770,7 @@ function findAndResolveCollisions ( i : number, input : any
   else if (touchingDatum.kind === "corner") {
     const angularParameter = touchingDatum.angular;
     const cornerDamageType = touchingDatum.damageType !== undefined ? touchingDatum.damageType : null;
-    dealWithCornerCollision(i, newECB, angularParameter, cornerDamageType);
+    dealWithCornerCollision(i, newPosition, newECB, angularParameter, cornerDamageType);
   }
 
   player[i].phys.ECB1 = newECB;

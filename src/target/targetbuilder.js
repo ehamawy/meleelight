@@ -652,10 +652,12 @@ export function targetBuilderControls (p, input){
           }
           if (hoverItem != 0) {
             if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
-              if (stageTemp[hoverItem[0]][hoverItem[1]][2] === dTypeReal[damageTypeIndex]) {
-                stageTemp[hoverItem[0]][hoverItem[1]][2] = null;
-              } else {
-                stageTemp[hoverItem[0]][hoverItem[1]][2] = dTypeReal[damageTypeIndex];
+              if (   stageTemp[hoverItem[0]][hoverItem[1]][2] === undefined 
+                  || stageTemp[hoverItem[0]][hoverItem[1]][2].damageType !== damageType ) {
+                stageTemp[hoverItem[0]][hoverItem[1]][2] = { damageType : damageType };
+              }
+              else {
+                stageTemp[hoverItem[0]][hoverItem[1]][2] = { damageType : null };
               }
               sounds.menuSelect.play();
             }
