@@ -288,7 +288,7 @@ export function targetBuilderControls (p, input){
       }*/
       //hoverButton = -1;
       let multi = (input[p][0].y || input[p][0].x)?1:5;
-      if (targetTool === 7) {
+      if (targetTool === 8) {
         multi = 0;
       }
       unGriddedCrossHairPos.x += input[p][0].lsX*multi*3/stageTemp.scale;
@@ -586,11 +586,9 @@ export function targetBuilderControls (p, input){
                 let distanceToOtherWalls;
                 if (wallType === "wallL") {
                   distanceToOtherWalls = lineDistanceToLines([convertedLeft, convertedRight], stageTemp.wallR);
-                  console.log(distanceToOtherWalls);
                 }
                 else if (wallType === "wallR") {
                   distanceToOtherWalls = lineDistanceToLines([convertedLeft, convertedRight], stageTemp.wallL);
-                  console.log(distanceToOtherWalls);
                 }
                 if (distanceToOtherWalls !== undefined && distanceToOtherWalls < 2) {
                   wallsTooCloseTimer = 120;
