@@ -32,8 +32,8 @@ function updatePosition ( i : number, newPosition : Vec2D ) : void {
   player[i].phys.pos = newPosition;
 };
 
-function dealWithDamagingStageCollision ( i : number, normal : Vec2D, angular : number, damageType : DamageType ) : void {
-  const collisionData = { normal: normal, angular : angular };
+function dealWithDamagingStageCollision ( i : number, normal : Vec2D, corner : bool, angular : number, damageType : DamageType ) : void {
+  const collisionData = { normal: normal, angular : angular, corner : corner };
   let damageTypeIndex = -1;
   switch(damageType) {
     case "fire":
@@ -78,7 +78,7 @@ function dealWithWallCollision ( i : number, newPosition : Vec2D, pt : number, w
     const wallNormal = outwardsWallNormal(wallBottom, wallTop, wallType);
 
     // apply damage
-    dealWithDamagingStageCollision(i, wallNormal, pt, damageType);
+    dealWithDamagingStageCollision(i, wallNormal, false, pt, damageType);
   }
   else if (player[i].actionState === "DAMAGEFLYN") {
     if (player[i].hit.hitlag === 0) {
@@ -131,7 +131,7 @@ function dealWithPlatformCollision( i : number, alreadyGrounded : boolean
     const platRight = extremePoint(platform,"r");
     const platNormal = outwardsWallNormal(platLeft, platRight, "p");
     // apply damage
-    dealWithDamagingStageCollision(i, platNormal, 0, damageType);
+    dealWithDamagingStageCollision(i, platNormal, false, 0, damageType);
   }
   else if (player[i].hit.hitlag > 0 || alreadyGrounded) {
     updatePosition(i, newPosition);
@@ -153,7 +153,7 @@ function dealWithGroundCollision( i : number, alreadyGrounded : boolean
     const groundRight = extremePoint(ground,"r");
     const groundNormal = outwardsWallNormal(groundLeft, groundRight, "g");
     // apply damage
-    dealWithDamagingStageCollision(i, groundNormal, 0, damageType);
+    dealWithDamagingStageCollision(i, groundNormal, false, 0, damageType);
   } else {
     if (player[i].hit.hitlag > 0 || alreadyGrounded) {
       updatePosition(i, newPosition);
@@ -310,7 +310,7 @@ function dealWithCeilingCollision( i : number, newPosition : Vec2D
     const ceilingRight = extremePoint(ceiling,"r");
     const ceilingNormal = outwardsWallNormal(ceilingLeft, ceilingRight, "c");
     // apply damage
-    dealWithDamagingStageCollision(i, ceilingNormal, 2, damageType);
+    dealWithDamagingStageCollision(i, ceilingNormal, false, 2, damageType);
   } 
   else if (actionStates[characterSelections[i]][player[i].actionState].headBonk) {
     if (player[i].hit.hitstun > 0) {
@@ -336,7 +336,7 @@ function dealWithCornerCollision(i : number, newPosition : Vec2D, ecb : ECB, ang
   const normal = outwardsWallNormal(lowerECBPoint, upperECBPoint, insideECBType);
   if (   damageType !== undefined && damageType !== null
       && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
-    dealWithDamagingStageCollision(i, normal, angularParameter, damageType);
+    dealWithDamagingStageCollision(i, normal, true, angularParameter, damageType);
   }
 };
 

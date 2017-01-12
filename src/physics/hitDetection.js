@@ -444,16 +444,21 @@ export function executeRegularHit (input, v, a, h, shieldHit, isThrow, drawBounc
   if (!isThrow) {
     if (stageDamage) {
       const angularParameter = a.angular;
-      const [same, other] = getSameAndOther(angularParameter);
-      const t = angularParameter - Math.floor(angularParameter);
       let collisionPoint;
-      if ((same === 1 && other === 2) || (same === 3 && other === 0)) {
-        collisionPoint = new Vec2D( (1-t)*player[v].phys.ECBp[same].x+t*player[v].phys.ECBp[other].x
-                                  , (1-t)*player[v].phys.ECBp[same].y+t*player[v].phys.ECBp[other].y );
+      if (a.corner) {
+        const [same, other] = getSameAndOther(angularParameter);
+        const t = angularParameter - Math.floor(angularParameter);
+        if ((same === 1 && other === 2) || (same === 3 && other === 0)) {
+          collisionPoint = new Vec2D( (1-t)*player[v].phys.ECBp[same].x+t*player[v].phys.ECBp[other].x
+                                    , (1-t)*player[v].phys.ECBp[same].y+t*player[v].phys.ECBp[other].y );
+        }
+        else {
+          collisionPoint = new Vec2D( (1-t)*player[v].phys.ECBp[other].x+t*player[v].phys.ECBp[same].x
+                                    , (1-t)*player[v].phys.ECBp[other].y+t*player[v].phys.ECBp[same].y );
+        }
       }
       else {
-        collisionPoint = new Vec2D( (1-t)*player[v].phys.ECBp[other].x+t*player[v].phys.ECBp[same].x
-                                  , (1-t)*player[v].phys.ECBp[other].y+t*player[v].phys.ECBp[same].y );
+        collisionPoint = player[v].phys.ECBp[angularParameter];
       }
       player[v].hit.hitPoint = collisionPoint;
       player[v].hit.reverse = false;
@@ -589,7 +594,7 @@ export function executeHits (input){
     if (stageDamage) {
       let normalAngle = Math.atan2(a.normal.y, a.normal.x);
       if (normalAngle < 0) {
-        normalAngle += Math.PI;
+        normalAngle += 2*Math.PI;
       }
       hitbox = { offset : new Vec2D(0,0),
                  dmg : 10,

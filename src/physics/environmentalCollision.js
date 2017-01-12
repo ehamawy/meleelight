@@ -235,14 +235,15 @@ function lineSweepParameters( line1 : [Vec2D, Vec2D], line2 : [Vec2D, Vec2D], fl
 };
 
 
-type EdgeSweepResult = { kind : "corner", corner : Vec2D, sweep : number, angular : number }
+type EdgeSweepResult = { kind : "corner", corner : Vec2D, sweep : number, angular : number, damageType? : DamageType}
 
 // finds whether the ECB impacted a surface on one of its edges
 function runEdgeSweep( ecb1 : ECB, ecbp : ECB, same : number
                      , wallType : string
                      , wallLeft : Vec2D, wallRight : Vec2D
                      , wallBottomOrLeft : Vec2D, wallTopOrRight : Vec2D
-                     , xOrY : XOrY ) : null | EdgeSweepResult {
+                     , xOrY : XOrY 
+                     , damageType : ?DamageType ) : null | EdgeSweepResult {
 
   let other = 0; // other ECB point
   let counterclockwise = true; // whether (same ECB point -> other ECB point) is counterclockwise (w.r.t. the ECB)
@@ -281,7 +282,7 @@ function runEdgeSweep( ecb1 : ECB, ecbp : ECB, same : number
     }
 
     if (!isOutside (corner, ecbp[same], ecbp[other], interiorECBside) && isOutside (corner, ecb1[same], ecb1[other], interiorECBside) ) {
-      edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, counterclockwise, corner );
+      edgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, other, counterclockwise, corner, damageType );
     }
   }
 
@@ -302,7 +303,7 @@ function runEdgeSweep( ecb1 : ECB, ecbp : ECB, same : number
     if (    !isOutside(otherCorner, ecbp[same], ecbp[2], otherInteriorECBside) 
          &&  isOutside(otherCorner, ecb1[same], ecb1[2], otherInteriorECBside)
        ) {
-      otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, otherCounterclockwise, otherCorner );
+      otherEdgeSweepResult = edgeSweepingCheck( ecb1, ecbp, same, 2, otherCounterclockwise, otherCorner, damageType );
     }
   }
 
@@ -313,7 +314,7 @@ function runEdgeSweep( ecb1 : ECB, ecbp : ECB, same : number
 // determines whether the given ECB edge (same--other) has collided with the corner, using the lineSweepParameters function
 function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : number
                           , counterclockwise : boolean
-                          , corner : Vec2D ) : null | EdgeSweepResult {
+                          , corner : Vec2D, damageType : ?DamageType ) : null | EdgeSweepResult {
 
   let output = null;
 
@@ -344,7 +345,7 @@ function edgeSweepingCheck( ecb1 : ECB, ecbp : ECB, same : number, other : numbe
     if (lineSweepResult !== null) {
       const [t,s] = lineSweepResult;
       const angularParameter = getAngularParameter ( t, same, other );
-      output = { kind : "corner", corner : corner, sweep : s, angular : angularParameter };
+      output = { kind : "corner", corner : corner, sweep : s, angular : angularParameter, damageType : damageType };
     }
   }
 
@@ -371,6 +372,7 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
 // walls and corners push out horizontally, grounds/ceilings/platforms push out vertically
 
   const [wall, [wallType, wallIndex]] = labelledSurface;
+  const damageType = wall[2] !== undefined ? wall[2].damageType : null;
 
   // start defining useful constants/variables
   const wallTop    = extremePoint(wall, "t");
@@ -427,11 +429,11 @@ function findCollision ( ecb1 : ECB, ecbp : ECB, labelledSurface : LabelledSurfa
     const closestEdgeCollision  = runEdgeSweep  ( ecb1, ecbp, same
                                                 , wallType
                                                 , wallLeft, wallRight, wallBottomOrLeft, wallTopOrRight
-                                                , xOrY) ;
+                                                , xOrY, damageType );
     const closestPointCollision = runPointSweep ( ecb1, ecbp, same
                                                 , wall, wallType, wallIndex
                                                 , wallBottomOrLeft, wallTopOrRight
-                                                , xOrY );
+                                                , xOrY, damageType );
 
     let finalCollision = null;
 
@@ -483,7 +485,8 @@ function findClosestCollision( ecb1 : ECB, ecbp : ECB
       else if (collisionDatum.kind === "corner") {
         touchingData.push( { sweep : collisionDatum.sweep, object : { kind : "corner"
                                                                     , corner : collisionDatum.corner
-                                                                    , angular : collisionDatum.angular 
+                                                                    , angular : collisionDatum.angular
+                                                                    , damageType : collisionDatum.damageType
                                                                     } } );
       }
     }
@@ -1207,16 +1210,6 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
   let newSquashDatum = { location : newSquashLocation, factor : newSquashFactor };
   newSquashDatum.factor *= ecbSquashDatum.factor;
   let newPosition = subtract(add(position, newECBp[0]), ecbp[0]);
-
-  let collisionLabel = null;
-  if (newTouching !== null) {
-    if (newTouching.kind === "surface") {
-      collisionLabel = [newTouching.type, newTouching.index];
-    }
-    else {
-      collisionLabel = ["x", -1];
-    }
-  }
 
   if (newSquashDatum.factor < 1) {
     let squashingLocation = null;
