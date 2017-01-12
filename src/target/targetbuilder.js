@@ -26,9 +26,13 @@ export let targetTool = 0;
 export let wallType = "ground";
 export let wallTypeIndex = 0;
 export let wallTypeList = ["ground","ceiling","wallL","wallR"];
+export let damageType = "fire";
+export let damageTypeIndex = 0;
+export let damageTypeList = ["fire","electric","slash","darkness"];
+export let dTypeReal = [3,4,1,5];
 export let showingCode = false;
 export let toolInfoTimer = 0;
-export let toolInfo = ["Polygon","Platform","Wall","Ledge","Target","Move","Delete","Scale","Draw Mode"];
+export let toolInfo = ["Polygon","Platform","Wall","Ledge","Damage","Target","Move","Delete","Scale","Draw Mode"];
 export let holdingA = false;
 export let amDrawingPolygon = false;
 export let drawingWall = [new Vec2D(0,0),new Vec2D(0,0)];
@@ -329,16 +333,16 @@ export function targetBuilderControls (p, input){
         sounds.menuSelect.play();
         targetTool--;
         if (targetTool === -1) {
-          targetTool = 8;
+          targetTool = 9;
         }
         toolInfoTimer = 120;
       } else if ((input[p][0].r && !input[p][1].r) || (input[p][0].dr && !input[p][1].dr)) {
         sounds.menuSelect.play();
         targetTool++;
-        if (targetTool === 9) {
+        if (targetTool === 10) {
           targetTool = 0;
         } else if (drawMode && targetTool === 2) {
-          targetTool = 5;
+          targetTool = 6;
         }
         toolInfoTimer = 120;
       } else if (targetTool === 2) {
@@ -357,6 +361,24 @@ export function targetBuilderControls (p, input){
             wallTypeIndex = 3;
           }
           wallType = wallTypeList[wallTypeIndex];
+          toolInfoTimer = 120;
+        }
+      } else if (targetTool === 4) {
+        if (input[p][0].du && !input[p][1].du) {
+          sounds.menuSelect.play();
+          damageTypeIndex++;
+          if (damageTypeIndex === 4) {
+            damageTypeIndex = 0;
+          }
+          damageType = damageTypeList[damageTypeIndex];
+          toolInfoTimer = 120;
+        } else if (input[p][0].dd && !input[p][1].dd) {
+          sounds.menuSelect.play();
+          damageTypeIndex--;
+          if (damageTypeIndex === -1) {
+            damageTypeIndex = 3;
+          }
+          damageType = damageTypeList[damageTypeIndex];
           toolInfoTimer = 120;
         }
       }
@@ -624,6 +646,22 @@ export function targetBuilderControls (p, input){
           }
           break;
         case 4:
+          // DAMAGE
+          if (!findLine(realCrossHair, false, ["wallL", "wallR", "ceiling", "ground"], true)) {
+            hoverItem = 0;
+          }
+          if (hoverItem != 0) {
+            if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
+              if (stageTemp[hoverItem[0]][hoverItem[1]][2] === dTypeReal[damageTypeIndex]) {
+                stageTemp[hoverItem[0]][hoverItem[1]][2] = null;
+              } else {
+                stageTemp[hoverItem[0]][hoverItem[1]][2] = dTypeReal[damageTypeIndex];
+              }
+              sounds.menuSelect.play();
+            }
+          }          
+          break;
+        case 5:
           //TARGET
           if (input[p][0].a && !input[p][1].a && !input[p][0].z) {
             if (stageTemp.target.length < 20) {
@@ -635,7 +673,7 @@ export function targetBuilderControls (p, input){
             }
           }
           break;
-        case 5:
+        case 6:
           //MOVE
           if (grabbedItem == 0) {
             if (drawMode) {
@@ -685,7 +723,7 @@ export function targetBuilderControls (p, input){
           }
 
           break;
-        case 6:
+        case 7:
           //DELETE
           if (drawMode) {
             if (!findPolygon(crossHairPos, true)) {
@@ -807,7 +845,7 @@ export function targetBuilderControls (p, input){
             }
           }
           break;
-        case 7:
+        case 8:
           // SCALE
           if (input[p][0].lsY > 0) {
             scaleScroll++;
@@ -833,7 +871,7 @@ export function targetBuilderControls (p, input){
             scaleScroll = 0;
           }
           break;
-        case 8:
+        case 9:
           // MODE SWITCH
           if (input[p][0].a && !input[p][1].a) {
             drawMode = 1 - drawMode;
@@ -1180,11 +1218,11 @@ export function renderTargetBuilder (){
   ui.fillStyle = "rgb(255,255,255)";
   ui.font = "13px Lucida Console, monaco, monospace";
 
-  for (let i=0;i<9;i++){
+  for (let i=0;i<10;i++){
     if (targetTool == i){
       if (toolInfoTimer > 0){
         let j = i;
-        if (i === 8) {
+        if (i === 9) {
           j = -1.25;
         }
         let text = toolInfo[targetTool];
@@ -1194,122 +1232,144 @@ export function renderTargetBuilder (){
         ui.save();
         ui.globalAlpha = 1 * hoverToolbar;
         ui.fillStyle = "rgba(0,0,0," + Math.min(toolInfoTimer / 60, 1) + ")";
-        ui.fillRect(620 + j * 70, 85, 80, 30);
+        ui.fillRect(550 + j * 70, 85, 80, 30);
         ui.fillStyle = "rgba(255,255,255," + Math.min(toolInfoTimer / 60, 1) + ")";
-        ui.fillText(text, 660 + j * 70, 103);
+        ui.fillText(text, 590 + j * 70, 103);
         ui.restore();
       }
       ui.globalAlpha = 0.6 * hoverToolbar;
-      if (targetTool === 2 && toolInfoTimer > 0) {
+      if ((targetTool === 2 || targetTool === 4) && toolInfoTimer > 0) {
         ui.save();
         ui.fillStyle = "rgba(255,255,255," + Math.min(toolInfoTimer / 60, 1) + ")";
         ui.strokeStyle = "rgba(0,0,0," + Math.min(toolInfoTimer / 60, 1) + ")";
         ui.lineWidth = 4;
         for (let n=0;n<3;n++) {
-          let index = wallTypeIndex + n + 1;
+          let index = (targetTool === 2 ? wallTypeIndex : damageTypeIndex) + n + 1;
           if (index > 3) {
             index -= 4;
           }
           ui.beginPath();
-          ui.moveTo(630 + i * 70, 30 + (n+1) * 70);
-          ui.arc(640 + i * 70, 30 + (n+1) * 70, 10, Math.PI, Math.PI * 1.5);
-          ui.lineTo(680 + i * 70, 20 + (n+1) * 70);
-          ui.arc(680 + i * 70, 30 + (n+1) * 70, 10, Math.PI * 1.5, twoPi);
-          ui.lineTo(690 + i * 70, 80 + (n+1) * 70);
-          ui.arc(680 + i * 70, 70 + (n+1) * 70, 10, 0, Math.PI / 2);
-          ui.lineTo(640 + i * 70, 80 + (n+1) * 70);
-          ui.arc(640 + i * 70, 70 + (n+1) * 70, 10, Math.PI / 2, Math.PI);
+          ui.moveTo(560 + i * 70, 30 + (n+1) * 70);
+          ui.arc(570 + i * 70, 30 + (n+1) * 70, 10, Math.PI, Math.PI * 1.5);
+          ui.lineTo(610 + i * 70, 20 + (n+1) * 70);
+          ui.arc(610 + i * 70, 30 + (n+1) * 70, 10, Math.PI * 1.5, twoPi);
+          ui.lineTo(620 + i * 70, 80 + (n+1) * 70);
+          ui.arc(610 + i * 70, 70 + (n+1) * 70, 10, 0, Math.PI / 2);
+          ui.lineTo(570 + i * 70, 80 + (n+1) * 70);
+          ui.arc(570 + i * 70, 70 + (n+1) * 70, 10, Math.PI / 2, Math.PI);
           ui.closePath();
           ui.fill();
           ui.beginPath();
-          switch (wallTypeList[index]) {
+          switch (targetTool === 2 ? wallTypeList[index] : damageTypeList[index]) {
             case "ground":
-              ui.moveTo(788, 57 + (n+1) * 70);
-              ui.lineTo(812, 29 + (n+1) * 70);
+              ui.moveTo(718, 57 + (n+1) * 70);
+              ui.lineTo(742, 49 + (n+1) * 70);
               break;
             case "ceiling":
-              ui.moveTo(788, 49 + (n+1) * 70);
-              ui.lineTo(812, 57 + (n+1) * 70);
+              ui.moveTo(718, 49 + (n+1) * 70);
+              ui.lineTo(742, 57 + (n+1) * 70);
               break;
             case "wallL":
-              ui.moveTo(804, 41 + (n+1) * 70);
-              ui.lineTo(796, 65 + (n+1) * 70);
+              ui.moveTo(734, 41 + (n+1) * 70);
+              ui.lineTo(726, 65 + (n+1) * 70);
               break;
             case "wallR":
-              ui.moveTo(796, 41 + (n+1) * 70);
-              ui.lineTo(804, 65 + (n+1) * 70);
+              ui.moveTo(726, 41 + (n+1) * 70);
+              ui.lineTo(734, 65 + (n+1) * 70);
+              break;
+            case "fire":
+              ui.save();
+              ui.fillStyle = "rgba(255, 136, 49, 0.5)";
+              break;
+            case "electric":
+              ui.save();
+              ui.fillStyle = "rgba(0, 236, 255, 0.5)";
+              break;
+            case "slash":
+              ui.save();
+              ui.fillStyle = "rgba(210, 210, 210, 0.5)";
+              break;
+            case "darkness":
+              ui.save();
+              ui.fillStyle = "rgba(82, 23, 186, 0.5)";
               break;
             default:
               break;
           }
-          ui.stroke();
+          if (targetTool === 2) {
+            ui.stroke();
+          } else {
+            ui.arc(870, 53 + (n+1) * 70, 15, 0, twoPi);
+            ui.fill();
+            ui.restore();
+          }
         }
         ui.restore();
       }
     } else {
       ui.globalAlpha = ((drawMode && i >= 2 && i <= 4) ? 0.1 : 0.2) * hoverToolbar;
     }
-    if (i === 7) {
+    if (i === 8) {
       ui.beginPath();
-      ui.moveTo(640 + i*70, 40);
-      ui.lineTo(660 + i*70, 25);
-      ui.lineTo(680 + i*70, 40);
-      ui.lineTo(675 + i*70, 40);
-      ui.lineTo(660 + i*70, 30);
-      ui.lineTo(645 + i*70, 40);
+      ui.moveTo(570 + i*70, 40);
+      ui.lineTo(590 + i*70, 25);
+      ui.lineTo(610 + i*70, 40);
+      ui.lineTo(605 + i*70, 40);
+      ui.lineTo(590 + i*70, 30);
+      ui.lineTo(575 + i*70, 40);
       ui.closePath();
       ui.fill();
       ui.beginPath();
-      ui.moveTo(640 + i*70, 60);
-      ui.lineTo(660 + i*70, 75);
-      ui.lineTo(680 + i*70, 60);
-      ui.lineTo(675 + i*70, 60);
-      ui.lineTo(660 + i*70, 70);
-      ui.lineTo(645 + i*70, 60);
+      ui.moveTo(570 + i*70, 60);
+      ui.lineTo(590 + i*70, 75);
+      ui.lineTo(610 + i*70, 60);
+      ui.lineTo(605 + i*70, 60);
+      ui.lineTo(590 + i*70, 70);
+      ui.lineTo(575 + i*70, 60);
       ui.closePath();
       ui.fill();
       ui.save();
       ui.font = "16px Lucida Console, monaco, monospace";
-      ui.fillText(stageTemp.scale.toFixed(2),660+i*70,56);
+      ui.fillText(stageTemp.scale.toFixed(2),590+i*70,56);
       ui.restore();
-    } else if (i === 8) {
+    } else if (i === 9) {
       ui.save();
       ui.fillStyle = "#4c4c4c";
       ui.beginPath();
-      ui.moveTo(530, 40);
-      ui.arc(540, 40, 10, Math.PI, Math.PI * 1.5);
-      ui.lineTo(610, 30);
-      ui.arc(610, 40, 10, Math.PI * 1.5, twoPi);
-      ui.lineTo(620, 70);
-      ui.arc(610, 60, 10, 0, Math.PI / 2);
-      ui.lineTo(540, 70);
-      ui.arc(540, 60, 10, Math.PI / 2, Math.PI);
+      ui.moveTo(460, 40);
+      ui.arc(470, 40, 10, Math.PI, Math.PI * 1.5);
+      ui.lineTo(540, 30);
+      ui.arc(540, 40, 10, Math.PI * 1.5, twoPi);
+      ui.lineTo(550, 70);
+      ui.arc(540, 60, 10, 0, Math.PI / 2);
+      ui.lineTo(470, 70);
+      ui.arc(470, 60, 10, Math.PI / 2, Math.PI);
       ui.closePath();
       ui.fill();
       ui.restore();
       ui.save();
       ui.font = "14px Lucida Console, monaco, monospace";
-      ui.fillText((drawMode ? "Background" : "Stage"),575,46);
+      ui.fillText((drawMode ? "Background" : "Stage"),505,46);
       ui.font = "10px Lucida Console, monaco, monospace";
-      ui.fillText((drawMode ? "(No Collision)" : "(Collision)"),575,63);
+      ui.fillText((drawMode ? "(No Collision)" : "(Collision)"),505,63);
       ui.restore();
     } else {
       ui.beginPath();
-      ui.moveTo(630 + i * 70, 30);
-      ui.arc(640 + i * 70, 30, 10, Math.PI, Math.PI * 1.5);
-      ui.lineTo(680 + i * 70, 20);
-      ui.arc(680 + i * 70, 30, 10, Math.PI * 1.5, twoPi);
-      ui.lineTo(690 + i * 70, 80);
-      ui.arc(680 + i * 70, 70, 10, 0, Math.PI / 2);
-      ui.lineTo(640 + i * 70, 80);
-      ui.arc(640 + i * 70, 70, 10, Math.PI / 2, Math.PI);
+      ui.moveTo(560 + i * 70, 30);
+      ui.arc(570 + i * 70, 30, 10, Math.PI, Math.PI * 1.5);
+      ui.lineTo(610 + i * 70, 20);
+      ui.arc(610 + i * 70, 30, 10, Math.PI * 1.5, twoPi);
+      ui.lineTo(620 + i * 70, 80);
+      ui.arc(610 + i * 70, 70, 10, 0, Math.PI / 2);
+      ui.lineTo(570 + i * 70, 80);
+      ui.arc(570 + i * 70, 70, 10, Math.PI / 2, Math.PI);
       ui.closePath();
       ui.fill();
     }
   }
   ui.lineWidth = 4;
   ui.globalAlpha = 1;
-  if (targetTool === 7) {
+  if (targetTool === 8) {
     let temX = (0 * stageTemp.scale) + stageTemp.offset[0];
     let temY = (0 * -stageTemp.scale) + stageTemp.offset[1];
     drawArrayPathCompress(ui, "rgb(250, 89, 89)", 1, temX, temY, animations[characterSelections[targetBuilder]].WAIT[0], player[targetBuilder].charAttributes.charScale * (stageTemp.scale / 4.5), player[targetBuilder].charAttributes.charScale * (stageTemp.scale / 4.5), 0, 0, 0);
@@ -1321,33 +1381,33 @@ export function renderTargetBuilder (){
   ui.font = "600 14px Lucida Console, monaco, monospace";
   //ui.fillText(120 - stageTemp.box.length, 745, 707); 
   ui.beginPath();
-  ui.moveTo(660,40);
-  ui.lineTo(672,60);
-  ui.lineTo(648,60);
+  ui.moveTo(590,40);
+  ui.lineTo(602,60);
+  ui.lineTo(578,60);
   ui.closePath();
   ui.stroke();
   //ui.fillText(120 - stageTemp.platform.length, 815, 707);
   ui.beginPath();
-  ui.moveTo(718, 50);
-  ui.lineTo(742, 50);
+  ui.moveTo(648, 50);
+  ui.lineTo(672, 50);
   ui.stroke();
   ui.beginPath();
   switch (wallType) {
     case "ground":
-      ui.moveTo(788, 57);
-      ui.lineTo(812, 49);
+      ui.moveTo(718, 57);
+      ui.lineTo(742, 49);
       break;
     case "ceiling":
-      ui.moveTo(788, 49);
-      ui.lineTo(812, 57);
+      ui.moveTo(718, 49);
+      ui.lineTo(742, 57);
       break;
     case "wallL":
-      ui.moveTo(804, 41);
-      ui.lineTo(796, 65);
+      ui.moveTo(734, 41);
+      ui.lineTo(726, 65);
       break;
     case "wallR":
-      ui.moveTo(796, 41);
-      ui.lineTo(804, 65);
+      ui.moveTo(726, 41);
+      ui.lineTo(734, 65);
       break;
     default:
       break;
@@ -1356,14 +1416,36 @@ export function renderTargetBuilder (){
   ui.closePath();
   ui.save();
   ui.scale(0.8,1);
-  ui.fillText(wallType, 800/0.8, 35);
+  ui.fillText(wallType, 730/0.8, 35);
   ui.restore();
   ui.beginPath();
-  ui.moveTo(860, 60);
-  ui.lineTo(860, 40);
-  ui.lineTo(880, 40);
+  ui.moveTo(790, 60);
+  ui.lineTo(790, 40);
+  ui.lineTo(810, 40);
   ui.stroke();
   ui.closePath();
+  ui.beginPath();
+  ui.save();
+  switch (damageType) {
+    case "fire":
+      ui.fillStyle = "rgba(255, 136, 49, 0.8)";
+      break;
+    case "electric":
+      ui.fillStyle = "rgba(0, 236, 255, 0.8)";
+      break;
+    case "slash":
+      ui.fillStyle = "rgba(210, 210, 210, 0.8)";
+      break;
+    case "darkness":
+      ui.fillStyle = "rgba(82, 23, 186, 0.8)";
+      break;
+  }
+  ui.arc(870, 53, 15, 0, twoPi);
+  ui.closePath();
+  ui.fill();
+  ui.scale(0.8,1);
+  ui.fillText(damageType, 870/0.8, 35);
+  ui.restore();
   ui.globalAlpha = (drawMode ? 0.5 : 1) * hoverToolbar;
   ui.fillText(20 - stageTemp.target.length, 955, 77);
   ui.fillStyle = "rgba(255,0,0,0.8)";
@@ -1409,13 +1491,13 @@ export function renderTargetBuilder (){
     ui.fillStyle = "rgba(255,255,255," + Math.min(wallsTooCloseTimer / 30, 1) + ")";
     ui.fillText("Walls too close", wallsTooClosePos.x + 70, wallsTooClosePos.y + 17);
   }
-  if (targetTool == 5) {
+  if (targetTool == 6) {
     if (grabbedItem == 0) {
       ui.drawImage(handOpen, crossHairPos.x * stageTemp.scale + 600 - 18, crossHairPos.y * -stageTemp.scale + 375 - 24, 36, 48);
     } else {
       ui.drawImage(handGrab, crossHairPos.x * stageTemp.scale + 600 - 18, crossHairPos.y * -stageTemp.scale + 375 - 24, 36, 48);
     }
-  } else if (targetTool == 6) {
+  } else if (targetTool == 7) {
     ui.font = "900 40px Arial";
     ui.fillStyle = "rgb(255, 83, 83)";
     ui.strokeStyle = "black";
@@ -1468,9 +1550,9 @@ export function findLine (realCrossHair, background = false, types = ["platform"
       line = stageTemp[types[i]];
     }
     for (let j=0;j<line.length;j++) {
-      if (distanceToLine(crossHairPos, line[j]) <= 5){
+      if (distanceToLine(crossHairPos, line[j]) <= 10){
         if (i === 0) {
-          hoverItem = [background ? "line" : "platform",j];
+          hoverItem = [background ? "line" : types[i],j];
           found = true;
           break;
         } else {

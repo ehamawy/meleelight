@@ -12,7 +12,7 @@ export default {
   ground: [[new Vec2D(-77.25, 0), new Vec2D(77.25, 0)]],
   ceiling: [[new Vec2D(-65.75, -36), new Vec2D(65.75, -36)]],
   wallL: [[new Vec2D(-77.25, 0), new Vec2D(-76.5, -11)], [new Vec2D(-76.5, -11), new Vec2D(-65.75, -36)]],
-  wallR: [[new Vec2D(77.25, 0), new Vec2D(76.5, -11)], [new Vec2D(76.5, -11), new Vec2D(65.75, -36)]],
+  wallR: [[new Vec2D(77.25, 0), new Vec2D(76.5, -11),3], [new Vec2D(76.5, -11), new Vec2D(65.75, -36),3]],
   startingPoint: [new Vec2D(-60, 50), new Vec2D(60, 50), new Vec2D(-40, 50), new Vec2D(40, 50)],
   startingFace: [1, -1, 1, -1],
   respawnPoints: [new Vec2D(-60, 50), new Vec2D(60, 50), new Vec2D(-40, 50), new Vec2D(40, 50)],

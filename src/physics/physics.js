@@ -18,6 +18,7 @@ import {lineAngle} from "../main/util/lineAngle";
 import {extremePoint} from "../stages/util/extremePoint";
 import {moveECB, squashECBAt} from "../main/util/ecbTransform";
 import {subtract} from "../main/linAlg";
+import {hitQueue} from 'physics/hitDetection';
 
 // eslint-disable-next-line no-duplicate-imports
 import type {Connected} from "../stages/stage";
@@ -41,7 +42,11 @@ function dealWithWallCollision (i : number, newCenter : Vec2D, wallType : string
     isRight = 1;
   }
 
-  if (player[i].actionState === "DAMAGEFLYN") {
+  if (activeStage["wall"+wallLabel][wallIndex][2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    // apply damage
+    hitQueue.push([i,"wall"+wallLabel,activeStage["wall"+wallLabel][wallIndex][2],false,false,true]);
+  }
+  else if (player[i].actionState === "DAMAGEFLYN") {
     if (player[i].hit.hitlag === 0) {
       player[i].phys.face = sign;
       if (player[i].phys.techTimer > 0) {
@@ -94,11 +99,16 @@ function dealWithPlatformCollision(i : number, alreadyGrounded : boolean
 function dealWithGroundCollision(i : number, alreadyGrounded : boolean
                                 , newCenter : Vec2D, ecbpBottom : Vec2D
                                 , groundIndex : number, input : any) : void {
-  if (player[i].hit.hitlag > 0 || alreadyGrounded) {
-    player[i].phys.pos = newCenter;
-  }
-  else {
-    land(i, ecbpBottom, 0, groundIndex, input);
+  if (activeStage.ground[groundIndex][2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    // apply damage
+    hitQueue.push([i,"ground",activeStage.ground[groundIndex][2],false,false,true]);
+  } else {
+    if (player[i].hit.hitlag > 0 || alreadyGrounded) {
+      player[i].phys.pos = newCenter;
+    }
+    else {
+      land(i, ecbpBottom, 0, groundIndex, input);
+    }
   }
 };
 
@@ -235,9 +245,14 @@ function dealWithGround(i : number, ground : [Vec2D, Vec2D], groundTypeAndIndex 
 
 function dealWithCeilingCollision(i : number, newCenter : Vec2D
                                  , ecbTop : Vec2D
+                                 , ceilingIndex : number
                                  , input : any) : void {
   player[i].phys.pos = newCenter;
-  if (actionStates[characterSelections[i]][player[i].actionState].headBonk) {
+  if (activeStage.ceiling[ceilingIndex][2] && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+    // apply damage
+    hitQueue.push([i,"ceiling",activeStage.ceiling[ceilingIndex][2],false,false,true]);
+  }
+  else if (actionStates[characterSelections[i]][player[i].actionState].headBonk) {
     if (player[i].hit.hitstun > 0) {
       if (player[i].phys.techTimer > 0) {
         actionStates[characterSelections[i]].TECHU.init(i,input);
@@ -396,6 +411,9 @@ function hitlagSwitchUpdate(i : number, input : any) : void {
       if (player[i].hit.shieldstun < 0) {
         player[i].hit.shieldstun = 0;
       }
+    }
+    if (player[i].phys.stageDamageImmunity > 0) {
+      player[i].phys.stageDamageImmunity--;
     }
     //console.log(actionStates[characterSelections[i]][player[i].actionState]);
     player[i].phys.canWallJump = actionStates[characterSelections[i]][player[i].actionState].wallJumpAble;
@@ -667,7 +685,7 @@ function findAndResolveCollisions ( i : number, input : any
         dealWithGroundCollision(i, player[i].phys.grounded, newPosition, newECB[0], surfaceIndex, input);
         break;
       case "c": // player touching ceiling
-        dealWithCeilingCollision(i, newPosition, newECB[2], input);
+        dealWithCeilingCollision(i, newPosition, newECB[2], surfaceIndex, input);
         break;
       case "p": // player landed on platform
         dealWithPlatformCollision(i, player[i].phys.grounded, newPosition, newECB[0], surfaceIndex, input);

@@ -206,8 +206,45 @@ let swirlTimer = 0;
 let swirlSwitch = false;
 
 let randallTimer = 0;
+let wallColour = ["rgb(255,0,40)","rgb(0,255,255)","rgb(125,125,125)","rgb(125,50,255)"];
+let wallColourIndex = [0,2,0,0,1,3,3,3,3,3,3,3,3,3,3];
+
+let wallCycle = 0;
+
+export function calculateDamageWallColours(){
+  let a = 0;
+  if (wallCycle < 240){
+    wallCycle++;
+    if (wallCycle > 120){
+      a = 240 - wallCycle;
+    } else {
+      a = wallCycle;
+    }
+  } else {
+    wallCycle = 0;
+  } 
+  const n = Math.round(255*a/120);
+  wallColour[0] = "rgb(255,"+n+",40)";
+  wallColour[1] = "rgb("+n+",255,255)";
+  const m = Math.round(125+n/2);
+  wallColour[2] = "rgb("+m+","+m+","+m+")";
+  wallColour[3] = "rgb("+Math.round(125-n/3)+",50,"+Math.round(255-n/3)+")";
+}
+
+export function drawDamageLine(type){
+  for (let i=0;i<activeStage[type].length;i++) {
+    if (activeStage[type][i][2]) {
+      fg2.strokeStyle = wallColour[wallColourIndex[activeStage[type][i][2]]];
+      fg2.beginPath();
+      fg2.moveTo((activeStage[type][i][0].x * activeStage.scale) + activeStage.offset[0], (activeStage[type][i][0].y * -activeStage.scale) + activeStage.offset[1]);
+      fg2.lineTo((activeStage[type][i][1].x * activeStage.scale) + activeStage.offset[0], (activeStage[type][i][1].y * -activeStage.scale) + activeStage.offset[1]);
+      fg2.stroke();
+    }
+  }
+}
 
 export function drawStage() {
+    calculateDamageWallColours();
     if (activeStage.movingPlat > -1) {
         /*fg2.strokeStyle = (holiday == 1) ? "white" : "#4794c6";
         fg2.beginPath();
@@ -271,6 +308,11 @@ export function drawStage() {
           bg2.restore();
         }
       }
+    }
+    fg2.lineWidth = 4;
+    let types = ["wallL", "wallR", "ground", "ceiling"]
+    for (let i=0;i<types.length;i++) {
+      drawDamageLine(types[i]);
     }
 
     fg2.strokeStyle = "#e7a44c";

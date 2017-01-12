@@ -860,12 +860,14 @@ export function gameTick (oldInputBuffers){
       var now = performance.now();
       var dt = now - lastUpdate;
       lastUpdate = now;
+      resetHitQueue();
       destroyArticles();
       executeArticles();
       if (!starting){
         input[targetBuilder] = interpretInputs(targetBuilder, true,playerType[targetBuilder],oldInputBuffers[targetBuilder]);
       }
       update(targetBuilder,input);
+      executeHits(input);
       targetHitDetection(targetBuilder);
       if (!starting) {
         targetTimerTick();
