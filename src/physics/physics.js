@@ -666,26 +666,20 @@ function findAndResolveCollisions ( i : number, input : any
   // main collision detection routine
 
   const notIgnoringPlatforms = ( !actionStates[characterSelections[i]][player[i].actionState].canPassThrough || (input[i][0].lsY > -0.56) );
-
-  let horizIgnore = "none"; // ignore no horizontal surfaces by default
-
-  if (player[i].phys.grounded) {
-    horizIgnore = "all"; // ignore all horizontal surfaces when grounded
-  }
-  else {
-    horizIgnore = notIgnoringPlatforms? "none" : "platforms";
-  }
-
   const isImmune = (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0);
+
+  const playerStatusInfo = { ignoringPlatforms : !notIgnoringPlatforms
+                           , grounded : player[i].phys.grounded
+                           , immune : (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0)
+                           }
 
   // type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1
                                             , player[i].phys.ECBp
                                             , player[i].phys.pos
                                             , ecbSquashData[i]
-                                            , horizIgnore
+                                            , playerStatusInfo
                                             , activeStage
-                                            , isImmune
                                             );
 
   ecbSquashData[i] = collisionData.squashDatum;

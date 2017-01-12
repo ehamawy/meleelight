@@ -502,6 +502,8 @@ type SimpleTouchingDatum = { kind : "surface", type : string, index : number, pt
 type CollisionObject = { kind : "surface", surface : Surface, type : string, pt : number, index : number } 
                      | { kind : "corner", corner : Vec2D, angular : number, damageType? : DamageType }
 
+type PlayerStatusInfo = { grounded : bool, ignoringPlatforms : bool, immune : bool };
+
 type ECBTouching = { ecb : ECB, touching : null | SimpleTouchingDatum };
 type Sliding = { type : null | "l" | "r" | "c", angular : null | number };
 type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchingDatum } 
@@ -509,18 +511,17 @@ type SlideDatum = { event : "end"     , finalECB : ECB, touching : SimpleTouchin
                 | { event : "squash"  , midECB : ECB, tgtECB : ECB, object : CollisionObject}
                 | { event : "continue" }
 
-function resolveECB ( ecb1 : ECB, ecbp : ECB, grounded : bool, labelledSurfaces : Array<LabelledSurface>, isImmune : bool ) : ECBTouching {
-  return runSlideRoutine( ecb1, ecbp, ecbp, grounded, labelledSurfaces, null, { type : null, angular : null }, true, 0, isImmune );  
+function resolveECB ( ecb1 : ECB, ecbp : ECB, playerStatusInfo : PlayerStatusInfo, labelledSurfaces : Array<LabelledSurface> ) : ECBTouching {
+  return runSlideRoutine( ecb1, ecbp, ecbp, playerStatusInfo, labelledSurfaces, null, { type : null, angular : null }, true, 0);  
 }
 
 function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
-                        , grounded : bool
+                        , playerStatusInfo : PlayerStatusInfo
                         , labelledSurfaces : Array<LabelledSurface>
                         , oldTouchingDatum : null | SimpleTouchingDatum
                         , slidingAgainst : Sliding
                         , final : bool
-                        , recursionCounter : number
-                        , isImmune : bool ) : ECBTouching {
+                        , recursionCounter : number ) : ECBTouching {
   let output; 
   if (recursionCounter > maxRecursion) {
     console.log("'runSlideRoutine': excessive recursion, aborting.");
@@ -530,7 +531,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
     output = { ecb : srcECB, touching : null };
   }
   else {
-    const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst, isImmune );
+    const slideDatum = slideECB ( srcECB, tgtECB, labelledSurfaces, slidingAgainst, playerStatusInfo );
     let newECBp = ecbp;
   
     if (slideDatum.event === "end") {
@@ -542,7 +543,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
       }
       else {
         newECBp = updateECBp( srcECB, tgtECB, ecbp, slidingAgainst.type, 0 );
-        output = runSlideRoutine ( tgtECB, newECBp, newECBp, grounded, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1, isImmune);
+        output = runSlideRoutine ( tgtECB, newECBp, newECBp, playerStatusInfo, labelledSurfaces, oldTouchingDatum, slidingAgainst, true, recursionCounter + 1);
       }
     }
     else { // slideDatum.event === "transfer" || slideDatum.event === "squash"
@@ -586,31 +587,29 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
 
       if (slideDatum.event === "transfer") {
         output = runSlideRoutine ( newSrcECB, newTgtECB, newECBp
-                                 , grounded
+                                 , playerStatusInfo 
                                  , labelledSurfaces
                                  , newTouchingDatum
                                  , { type : newSlidingType
                                    , angular : angular }
                                  , newFinal
-                                 , recursionCounter + 1
-                                 , isImmune );
+                                 , recursionCounter + 1 );
       }
       else {
         const otherTgtECB = slideDatum.tgtECB;
-        const [squashTgtECB, abort] = agreeOnTargetECB(newSrcECB, otherTgtECB, newTgtECB, newECBp, same, grounded);
+        const [squashTgtECB, abort] = agreeOnTargetECB(newSrcECB, otherTgtECB, newTgtECB, newECBp, same, playerStatusInfo.grounded);
         if (abort) {
           output = { ecb : srcECB, touching : oldTouchingDatum };
         }
         else {
           output = runSlideRoutine ( newSrcECB, squashTgtECB, newECBp
-                                   , grounded
+                                   , playerStatusInfo 
                                    , labelledSurfaces
                                    , newTouchingDatum
                                    , { type : newSlidingType
                                      , angular : angular }
                                    , newFinal && final
-                                   , recursionCounter + 1
-                                   , isImmune );
+                                   , recursionCounter + 1 );
         }
       }     
     }
@@ -622,7 +621,7 @@ function runSlideRoutine( srcECB : ECB, tgtECB : ECB, ecbp : ECB
 function slideECB ( srcECB : ECB, tgtECB : ECB
                   , labelledSurfaces : Array<LabelledSurface>
                   , slidingAgainst : Sliding
-                  , isImmune : bool
+                  , playerStatusInfo : PlayerStatusInfo
                   ) : SlideDatum {
   let output;
 
@@ -644,7 +643,7 @@ function slideECB ( srcECB : ECB, tgtECB : ECB
     // damaging objects cause premature end to sliding
 
     let damageType = null;
-    if (!isImmune) {
+    if (!playerStatusInfo.immune) {
       if (collisionObject.kind === "surface") {
         const surfaceProperties = collisionObject.surface[2];
         if (surfaceProperties !== null && surfaceProperties !== undefined) {
@@ -1140,13 +1139,13 @@ function reinflateECB ( ecb : ECB, position : Vec2D
 // main collision routine
 
 type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
+// recall: type PlayerStatusInfo = { grounded : bool, ignoringPlatforms : bool, immune : bool };
 
 // this function initialises necessary data and then calls the main collision routine loop
 export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
                                    , ecbSquashDatum : SquashDatum
-                                   , horizIgnore : string
+                                   , playerStatusInfo : PlayerStatusInfo
                                    , stage : Stage
-                                   , isImmune : bool
                                    ) : CollisionRoutineResult {
 
   // --------------------------------------------------------------
@@ -1159,6 +1158,19 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
 
   // ABOVE: this is recomputed every frame and should be avoided
   // --------------------------------------------------------------
+
+  const grounded = playerStatusInfo.grounded;
+  const ignoringPlatforms = playerStatusInfo.ignoringPlatforms;
+  const isImmune = playerStatusInfo.immune;
+
+  let horizIgnore = "none"; // ignore no horizontal surfaces by default
+
+  if (grounded) {
+    horizIgnore = "all"; // ignore all horizontal surfaces when grounded
+  }
+  else {
+    horizIgnore = ignoringPlatforms? "platforms" : "none";
+  }
 
   const allSurfacesMinusPlatforms = stageWalls.concat(stageGrounds).concat(stageCeilings);
   let relevantSurfaces = [];
@@ -1175,8 +1187,7 @@ export function runCollisionRoutine( ecb1 : ECB, ecbp : ECB, position : Vec2D
       break;
   }
 
-  const grounded = horizIgnore === "all" ? true : false;
-  const resolution = resolveECB( ecb1, ecbp, grounded, relevantSurfaces, isImmune );
+  const resolution = resolveECB( ecb1, ecbp, playerStatusInfo, relevantSurfaces );
   const newTouching = resolution.touching;
   let newECBp = resolution.ecb;
   const newSquashFactor = Math.min(1,(newECBp[1].x - newECBp[3].x) / (ecbp[1].x - ecbp[3].x));
