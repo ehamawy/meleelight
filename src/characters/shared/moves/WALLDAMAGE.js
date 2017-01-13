@@ -4,6 +4,8 @@ import {sounds} from "main/sfx";
 import {framesData} from 'main/characters';
 import {drawVfx} from "main/vfx/drawVfx";
 import {getHorizontalDecay, getVerticalDecay} from "physics/hitDetection";
+import {add, reflect, norm} from "main/linAlg";
+
 export default {
   name : "WALLDAMAGE",
   canPassThrough : false,
@@ -16,29 +18,18 @@ export default {
     player[p].actionState = "WALLDAMAGE";
     player[p].timer = 0;
     sounds.bounce.play();
-    //player[p].phys.kVel.y *= 0.8;
-    //player[p].phys.kVel.x *= -0.8;
-    //player[p].phys.kDec.x *= -1;
-    console.log(normal);
-    let normalAngle = Math.atan2(normal.y, normal.x);
-    if (normalAngle < 0) {
-      normalAngle += 2*Math.PI;
-    }
-    console.log(normalAngle);
-    let currentVelAngle = Math.atan2(player[p].phys.kVel.y+player[p].phys.cVel.y, player[p].phys.kVel.x+player[p].phys.cVel.x);
-    if (currentVelAngle < 0) {
-      currentVelAngle += 2*Math.PI;
-    }
-    console.log(currentVelAngle);
-    const newVelAngle = 2*normalAngle - currentVelAngle;
-    console.log(newVelAngle);
 
+    const currentVel = add(player[p].phys.cVel,player[p].phys.kVel);
+    const reflectedVel = reflect(currentVel, normal);
+
+    /* bogus follows
     let currentKVelMagnitude = Math.sqrt(Math.pow(player[p].phys.kVel.x,2),Math.pow(player[p].phys.kVel.y,2));
     currentKVelMagnitude *= 0.8;
     player[p].phys.kVel.x = newVelAngle*Math.cos(currentKVelMagnitude);
     player[p].phys.kVel.y = newVelAngle*Math.sin(currentKVelMagnitude);
     player[p].phys.kDec.x = Math.round(0.051 * Math.cos(newVelAngle) * 100000) / 100000;
     player[p].phys.kDec.y = Math.round(0.051 * Math.sin(newVelAngle) * 100000) / 100000;
+    */
 
     actionStates[characterSelections[p]].WALLDAMAGE.main(p,input);
   },

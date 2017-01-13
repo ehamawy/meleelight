@@ -83,3 +83,9 @@ export function multMatVect( [[x1, x2],[y1, y2]] : [[number, number], [number,nu
                            ,  [x , y ] : [number, number]) : [number, number] {
   return [x1 * x + x2 * y, y1 * x + y2 * y];
 };
+
+export function reflect( reflectee : Vec2D, reflector : Vec2D ) : Vec2D {
+  const projVec = orthogonalProjection(reflectee, [new Vec2D(0,0), reflector]);
+  const moveVec = subtract(projVec, reflectee);
+  return add(reflectee, scalarProd(2, moveVec));
+}
