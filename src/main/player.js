@@ -98,7 +98,6 @@ export function physicsObject(pos, face) {
   this.rollOutDistance = 0;
   this.bTurnaroundTimer = 0;
   this.bTurnaroundDirection = 1;
-  this.stageDamageImmunity = 0;
 }
 export function inputObject() {
 

@@ -74,48 +74,50 @@ function dealWithWallCollision ( i : number, newPosition : Vec2D, pt : number, w
   const wallNormal = outwardsWallNormal(wallBottom, wallTop, wallType);
   const damageType = wall[2] === undefined ? null : wall[2].damageType;
 
-  if (   damageType !== undefined && damageType !== null 
-      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
-    // apply damage
-    dealWithDamagingStageCollision(i, wallNormal, false, pt, damageType);
-  }
-  else if (player[i].actionState === "DAMAGEFLYN" || player[i].actionState === "WALLDAMAGE" || player[i].actionState === "DAMAGEFALL") {
-    if (player[i].hit.hitlag === 0) {
-      player[i].phys.face = sign;
-      if (player[i].phys.techTimer > 0) {
-        if (input[i][0].x || input[i][0].y || input[i][0].lsY > 0.7) {
-          actionStates[characterSelections[i]].WALLTECHJUMP.init(i,input);
-        } else {
-          actionStates[characterSelections[i]].WALLTECH.init(i,input);
-        }
-      } else {
-        drawVfx("wallBounce", new Vec2D(player[i].phys.pos.x, player[i].phys.ECBp[1].y), sign, isRight);
-        actionStates[characterSelections[i]].WALLDAMAGE.init(i,input, wallNormal);
-      }
-    }
-  }
-  else if (actionStates[characterSelections[i]][player[i].actionState].specialWallCollide) {
-    actionStates[characterSelections[i]][player[i].actionState].onWallCollide(i, wallLabel, wallIndex);
-  }
-  else if (player[i].phys.canWallJump) {
-    if (player[i].phys.wallJumpTimer === 254) {
-      if (player[i].phys.posDelta.x >= 0.5) {
-        player[i].phys.wallJumpTimer = 0;
-      }
-    }
-  }
-  if (player[i].phys.wallJumpTimer >= 0 && player[i].phys.wallJumpTimer < 120) {
-    if (sign * input[i][0].lsX >= 0.7 &&
-        sign * input[i][3].lsX <= 0 &&
-        player[i].charAttributes.walljump) {
-      player[i].phys.wallJumpTimer = 254;
-      player[i].phys.face = sign;
-      actionStates[characterSelections[i]].WALLJUMP.init(i,input);
-    } else {
-      player[i].phys.wallJumpTimer++;
-    }
-  }
+  const inDamageState = player[i].actionState === "DAMAGEFLYN" || player[i].actionState === "WALLDAMAGE" || player[i].actionState === "DAMAGEFALL";
 
+  if (inDamageState && player[i].phys.techTimer > 0) {
+    player[i].phys.face = sign;
+    if (input[i][0].x || input[i][0].y || input[i][0].lsY > 0.7) {
+      actionStates[characterSelections[i]].WALLTECHJUMP.init(i,input);
+    } else {
+      actionStates[characterSelections[i]].WALLTECH.init(i,input);
+    }
+  } 
+  else if (inDamageState && player[i].hit.hitlag === 0 && Math.pow(player[i].phys.kVel.x,2)+Math.pow(player[i].phys.kVel.y,2) >= 4){
+    player[i].phys.face = sign;
+    drawVfx("wallBounce", new Vec2D(player[i].phys.pos.x, player[i].phys.ECBp[1].y), sign, isRight);
+    actionStates[characterSelections[i]].WALLDAMAGE.init(i,input, wallNormal);
+  }
+  else if (player[i].hit.hitlag === 0){
+    if (damageType !== undefined && damageType !== null 
+        && player[i].phys.hurtBoxState === 0) {
+      // apply damage
+      dealWithDamagingStageCollision(i, wallNormal, false, pt, damageType);
+    }
+    else if (actionStates[characterSelections[i]][player[i].actionState].specialWallCollide) {
+      actionStates[characterSelections[i]][player[i].actionState].onWallCollide(i, wallLabel, wallIndex);
+    }
+    else if (player[i].phys.canWallJump) {
+      if (player[i].phys.wallJumpTimer === 254) {
+        if (player[i].phys.posDelta.x >= 0.5) {
+          player[i].phys.wallJumpTimer = 0;
+        }
+      }
+    }
+    if (player[i].phys.wallJumpTimer >= 0 && player[i].phys.wallJumpTimer < 120) {
+      if (sign * input[i][0].lsX >= 0.7 &&
+          sign * input[i][3].lsX <= 0 &&
+          player[i].charAttributes.walljump) {
+        player[i].phys.wallJumpTimer = 254;
+        player[i].phys.face = sign;
+        actionStates[characterSelections[i]].WALLJUMP.init(i,input);
+      } else {
+        player[i].phys.wallJumpTimer++;
+      }
+    }
+  }
+  
 };
 
 function dealWithPlatformCollision( i : number, alreadyGrounded : boolean
@@ -124,15 +126,7 @@ function dealWithPlatformCollision( i : number, alreadyGrounded : boolean
   const platform = getSurfaceFromStage(["p", platformIndex], activeStage);
   const damageType = platform[2] === undefined ? null : platform[2].damageType;
 
-  if (    damageType !== undefined && damageType !== null 
-       && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
-    const platLeft = extremePoint(platform, "l");
-    const platRight = extremePoint(platform,"r");
-    const platNormal = outwardsWallNormal(platLeft, platRight, "p");
-    // apply damage
-    dealWithDamagingStageCollision(i, platNormal, false, 0, damageType);
-  }
-  else if (player[i].hit.hitlag > 0 || alreadyGrounded) {
+  if (player[i].hit.hitlag > 0 || alreadyGrounded) {
     updatePosition(i, newPosition);
   }
   else {
@@ -146,8 +140,10 @@ function dealWithGroundCollision( i : number, alreadyGrounded : boolean
   const ground = getSurfaceFromStage(["g", groundIndex], activeStage);
   const damageType = ground[2] === undefined ? null : ground[2].damageType;
 
-  if (   damageType !== undefined && damageType !== null
-      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+  const ignoreDamage = player[i].actionState === "DAMAGEFLYN" || player[i].actionState === "DAMAGEFALL" || player[i].actionState === "WALLDAMAGE";
+
+  if (   !ignoreDamage && damageType !== undefined && damageType !== null
+      && player[i].phys.hurtBoxState === 0) {
     const groundLeft = extremePoint(ground, "l");
     const groundRight = extremePoint(ground,"r");
     const groundNormal = outwardsWallNormal(groundLeft, groundRight, "g");
@@ -302,12 +298,14 @@ function dealWithCeilingCollision( i : number, newPosition : Vec2D
   updatePosition(i, newPosition);
   const ceiling = getSurfaceFromStage(["c", ceilingIndex], activeStage);
   const damageType = ceiling[2] === undefined ? null : ceiling[2].damageType;
+  const ceilingLeft = extremePoint(ceiling, "l");
+  const ceilingRight = extremePoint(ceiling,"r");
+  const ceilingNormal = outwardsWallNormal(ceilingLeft, ceilingRight, "c");
 
-  if (   damageType !== undefined && damageType !== null
-      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
-    const ceilingLeft = extremePoint(ceiling, "l");
-    const ceilingRight = extremePoint(ceiling,"r");
-    const ceilingNormal = outwardsWallNormal(ceilingLeft, ceilingRight, "c");
+  const ignoreDamage = player[i].actionState === "DAMAGEFLYN" || player[i].actionState === "DAMAGEFALL" || player[i].actionState === "WALLDAMAGE";
+
+  if (   !ignoreDamage && damageType !== undefined && damageType !== null
+      && player[i].phys.hurtBoxState === 0) {
     // apply damage
     dealWithDamagingStageCollision(i, ceilingNormal, false, 2, damageType);
   } 
@@ -318,7 +316,7 @@ function dealWithCeilingCollision( i : number, newPosition : Vec2D
       } else {
         drawVfx("ceilingBounce", ecbTop, 1);
         sounds.bounce.play();
-        actionStates[characterSelections[i]].STOPCEIL.init(i,input);
+        actionStates[characterSelections[i]].STOPCEIL.init(i,input,ceilingNormal);
       }
     } else {
       actionStates[characterSelections[i]].STOPCEIL.init(i,input);
@@ -334,7 +332,7 @@ function dealWithCornerCollision(i : number, newPosition : Vec2D, ecb : ECB, ang
   const upperECBPoint = other === 2 ? ecb[2] : ecb[same];
   const normal = outwardsWallNormal(lowerECBPoint, upperECBPoint, insideECBType);
   if (   damageType !== undefined && damageType !== null
-      && player[i].phys.hurtBoxState === 0 && player[i].phys.stageDamageImmunity === 0) {
+      && player[i].phys.hurtBoxState === 0) {
     dealWithDamagingStageCollision(i, normal, true, angularParameter, damageType);
   }
 };
@@ -475,6 +473,10 @@ function hitlagSwitchUpdate(i : number, input : any) : void {
       default:
         break;
     }
+    if (player[i].hit.hitlag === 0) {
+      // if hitlag just ended, do normal stuff as well
+      hitlagSwitchUpdate(i,input);
+    }
   }
   else {
     if (player[i].hit.shieldstun > 0) {
@@ -483,9 +485,6 @@ function hitlagSwitchUpdate(i : number, input : any) : void {
       if (player[i].hit.shieldstun < 0) {
         player[i].hit.shieldstun = 0;
       }
-    }
-    if (player[i].phys.stageDamageImmunity > 0) {
-      player[i].phys.stageDamageImmunity--;
     }
     //console.log(actionStates[characterSelections[i]][player[i].actionState]);
     player[i].phys.canWallJump = actionStates[characterSelections[i]][player[i].actionState].wallJumpAble;
@@ -716,11 +715,11 @@ function findAndResolveCollisions ( i : number, input : any
   // main collision detection routine
 
   const notIgnoringPlatforms = ( !actionStates[characterSelections[i]][player[i].actionState].canPassThrough || (input[i][0].lsY > -0.56) );
-  const isImmune = (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0);
+  const isImmune = player[i].phys.hurtBoxState !== 0;
 
   const playerStatusInfo = { ignoringPlatforms : !notIgnoringPlatforms
                            , grounded : player[i].phys.grounded
-                           , immune : (player[i].phys.hurtBoxState !== 0 || player[i].phys.stageDamageImmunity > 0) };
+                           , immune : (player[i].phys.hurtBoxState !== 0) };
 
   // type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1

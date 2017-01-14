@@ -4,7 +4,8 @@ import {sounds} from "main/sfx";
 import {framesData} from 'main/characters';
 import {drawVfx} from "main/vfx/drawVfx";
 import {getHorizontalDecay, getVerticalDecay} from "physics/hitDetection";
-import {add, reflect, norm} from "main/linAlg";
+import {reflect, dotProd} from "main/linAlg";
+import {Vec2D} from "main/util/Vec2D";
 
 export default {
   name : "WALLDAMAGE",
@@ -18,18 +19,16 @@ export default {
     player[p].actionState = "WALLDAMAGE";
     player[p].timer = 0;
     sounds.bounce.play();
-
-    const currentVel = add(player[p].phys.cVel,player[p].phys.kVel);
-    const reflectedVel = reflect(currentVel, normal);
-
-    /* bogus follows
-    let currentKVelMagnitude = Math.sqrt(Math.pow(player[p].phys.kVel.x,2),Math.pow(player[p].phys.kVel.y,2));
-    currentKVelMagnitude *= 0.8;
-    player[p].phys.kVel.x = newVelAngle*Math.cos(currentKVelMagnitude);
-    player[p].phys.kVel.y = newVelAngle*Math.sin(currentKVelMagnitude);
-    player[p].phys.kDec.x = Math.round(0.051 * Math.cos(newVelAngle) * 100000) / 100000;
-    player[p].phys.kDec.y = Math.round(0.051 * Math.sin(newVelAngle) * 100000) / 100000;
-    */
+    player[p].phys.hurtBoxState = 1;
+    player[p].phys.intangibleTimer = Math.max(player[p].phys.intangibleTimer,15);
+    player[p].phys.cVel.x = 0;
+    player[p].phys.cVel.y = 0;
+    const reflectedDec = dotProd(player[p].phys.kVel,normal) > 0 ? player[p].phys.kDec : reflect(player[p].phys.kDec, new Vec2D(-normal.y, normal.x));
+    const reflectedVel = dotProd(player[p].phys.kVel,normal) > 0 ? player[p].phys.kVel : reflect(player[p].phys.kVel, new Vec2D(-normal.y, normal.x));
+    player[p].phys.kVel.x = reflectedVel.x * 0.8;
+    player[p].phys.kVel.y = reflectedVel.y * 0.8;
+    player[p].phys.kDec.x = reflectedDec.x;
+    player[p].phys.kDec.y = reflectedDec.y;
 
     actionStates[characterSelections[p]].WALLDAMAGE.main(p,input);
   },
