@@ -126,11 +126,15 @@ function dealWithPlatformCollision( i : number, alreadyGrounded : boolean
   const platform = getSurfaceFromStage(["p", platformIndex], activeStage);
   const damageType = platform[2] === undefined ? null : platform[2].damageType;
 
+  const platLeft = extremePoint(platform, "l");
+  const platRight = extremePoint(platform,"r");
+  const platNormal = outwardsWallNormal(platLeft, platRight, "g");
+
   if (player[i].hit.hitlag > 0 || alreadyGrounded) {
     updatePosition(i, newPosition);
   }
   else {
-    land(i, ecbpBottom, 1, platformIndex, input);
+    land(i, ecbpBottom, 1, platformIndex, input, platNormal);
   }
 };
 
@@ -309,7 +313,7 @@ function dealWithCeilingCollision( i : number, newPosition : Vec2D
     // apply damage
     dealWithDamagingStageCollision(i, ceilingNormal, false, 2, damageType);
   } 
-  else if (actionStates[characterSelections[i]][player[i].actionState].headBonk) {
+  else if (actionStates[characterSelections[i]][player[i].actionState].headBonk && player[i].phys.cVel.y+player[i].phys.kVel.y > 0) {
     if (player[i].hit.hitstun > 0) {
       if (player[i].phys.techTimer > 0) {
         actionStates[characterSelections[i]].TECHU.init(i,input);
