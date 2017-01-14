@@ -83,10 +83,10 @@ function dealWithWallCollision ( i : number, newPosition : Vec2D, pt : number, w
     } else {
       actionStates[characterSelections[i]].WALLTECH.init(i,input);
     }
-  } 
-  else if (inDamageState && player[i].hit.hitlag === 0 && Math.pow(player[i].phys.kVel.x,2)+Math.pow(player[i].phys.kVel.y,2) >= 4){
+  }
+  else if (inDamageState && Math.sign(player[i].phys.kVel) !== sign && player[i].hit.hitlag === 0 && Math.pow(player[i].phys.kVel.x,2)+Math.pow(player[i].phys.kVel.y,2) >= 2.25){
     player[i].phys.face = sign;
-    drawVfx("wallBounce", new Vec2D(player[i].phys.pos.x, player[i].phys.ECBp[1].y), sign, isRight);
+    drawVfx("wallBounce", new Vec2D(player[i].phys.pos.x, player[i].phys.ECBp[1].y), sign, wallNormal);
     actionStates[characterSelections[i]].WALLDAMAGE.init(i,input, wallNormal);
   }
   else if (player[i].hit.hitlag === 0){
@@ -141,12 +141,12 @@ function dealWithGroundCollision( i : number, alreadyGrounded : boolean
   const damageType = ground[2] === undefined ? null : ground[2].damageType;
 
   const ignoreDamage = player[i].actionState === "DAMAGEFLYN" || player[i].actionState === "DAMAGEFALL" || player[i].actionState === "WALLDAMAGE";
+  const groundLeft = extremePoint(ground, "l");
+  const groundRight = extremePoint(ground,"r");
+  const groundNormal = outwardsWallNormal(groundLeft, groundRight, "g");
 
   if (   !ignoreDamage && damageType !== undefined && damageType !== null
       && player[i].phys.hurtBoxState === 0) {
-    const groundLeft = extremePoint(ground, "l");
-    const groundRight = extremePoint(ground,"r");
-    const groundNormal = outwardsWallNormal(groundLeft, groundRight, "g");
     // apply damage
     dealWithDamagingStageCollision(i, groundNormal, false, 0, damageType);
   } else {
@@ -154,7 +154,7 @@ function dealWithGroundCollision( i : number, alreadyGrounded : boolean
       updatePosition(i, newPosition);
     }
     else {
-      land(i, ecbpBottom, 0, groundIndex, input);
+      land(i, ecbpBottom, 0, groundIndex, input, groundNormal);
     }
   }
 };
@@ -314,7 +314,7 @@ function dealWithCeilingCollision( i : number, newPosition : Vec2D
       if (player[i].phys.techTimer > 0) {
         actionStates[characterSelections[i]].TECHU.init(i,input);
       } else {
-        drawVfx("ceilingBounce", ecbTop, 1);
+        drawVfx("ceilingBounce", ecbTop, 1, ceilingNormal);
         sounds.bounce.play();
         actionStates[characterSelections[i]].STOPCEIL.init(i,input,ceilingNormal);
       }
@@ -331,7 +331,7 @@ function dealWithCornerCollision(i : number, newPosition : Vec2D, ecb : ECB, ang
   const lowerECBPoint = other === 2 ? ecb[same] : ecb[0];
   const upperECBPoint = other === 2 ? ecb[2] : ecb[same];
   const normal = outwardsWallNormal(lowerECBPoint, upperECBPoint, insideECBType);
-  if (   damageType !== undefined && damageType !== null
+  if (player[i].hit.hitlag === 0 && damageType !== undefined && damageType !== null
       && player[i].phys.hurtBoxState === 0) {
     dealWithDamagingStageCollision(i, normal, true, angularParameter, damageType);
   }
@@ -339,7 +339,7 @@ function dealWithCornerCollision(i : number, newPosition : Vec2D, ecb : ECB, ang
 
 export function land (i : number, newPosition : Vec2D
                      ,t : number ,j : number
-                     , input : any) : void {
+                     , input : any, normal : Vec2D) : void {
   player[i].phys.pos = newPosition;
   player[i].phys.grounded = true;
   player[i].phys.doubleJumped = false;
@@ -368,7 +368,7 @@ export function land (i : number, newPosition : Vec2D
       break;
     case 1:
       // OWN FUNCTION
-      actionStates[characterSelections[i]][player[i].actionState].land(i,input);
+      actionStates[characterSelections[i]][player[i].actionState].land(i,input,normal);
       break;
     case 2:
       // KNOCKDOWN / TECH
@@ -381,7 +381,7 @@ export function land (i : number, newPosition : Vec2D
           actionStates[characterSelections[i]].TECHN.init(i,input);
         }
       } else {
-        actionStates[characterSelections[i]].DOWNBOUND.init(i,input);
+        actionStates[characterSelections[i]].DOWNBOUND.init(i,input,normal);
       }
       break;
     default:
