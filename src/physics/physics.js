@@ -719,7 +719,7 @@ function findAndResolveCollisions ( i : number, input : any
 
   const playerStatusInfo = { ignoringPlatforms : !notIgnoringPlatforms
                            , grounded : player[i].phys.grounded
-                           , immune : (player[i].phys.hurtBoxState !== 0) };
+                           , immune : isImmune };
 
   // type CollisionRoutineResult = { position : Vec2D, touching : null | SimpleTouchingDatum, squashDatum : SquashDatum, ecb : ECB};
   const collisionData = runCollisionRoutine ( player[i].phys.ECB1

@@ -23,8 +23,9 @@ export default {
     player[p].phys.intangibleTimer = Math.max(player[p].phys.intangibleTimer,15);
     player[p].phys.cVel.x = 0;
     player[p].phys.cVel.y = 0;
-    const reflectedDec = dotProd(player[p].phys.kVel,normal) > 0 ? player[p].phys.kDec : reflect(player[p].phys.kDec, new Vec2D(-normal.y, normal.x));
-    const reflectedVel = dotProd(player[p].phys.kVel,normal) > 0 ? player[p].phys.kVel : reflect(player[p].phys.kVel, new Vec2D(-normal.y, normal.x));
+    const tangent = new Vec2D(-normal.y, normal.x);
+    const reflectedDec = dotProd(player[p].phys.kVel,normal) < 0 ? reflect(player[p].phys.kDec, tangent) : player[p].phys.kDec;
+    const reflectedVel = dotProd(player[p].phys.kVel,normal) < 0 ? reflect(player[p].phys.kVel, tangent) : player[p].phys.kVel;
     player[p].phys.kVel.x = reflectedVel.x * 0.8;
     player[p].phys.kVel.y = reflectedVel.y * 0.8;
     player[p].phys.kDec.x = reflectedDec.x;
